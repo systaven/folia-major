@@ -71,13 +71,13 @@ export const buildOnlineRadioCards = (
 ): LibraryHomeCard[] => {
     if (!feed) return [];
     const sources: RadioSource[] = [
-        {
+        ...(feed.supportsPersonalFm === false ? [] : [{
             id: PERSONAL_FM_CARD_ID,
             name: t('home.personalFm'),
             coverUrl: feed.personalFmCoverUrl,
             description: t('home.personalFm'),
             isFm: true,
-        },
+        }]),
         ...(feed.supportsDailySongs === false ? [] : [{
             id: DAILY_RECOMMENDATIONS_CARD_ID,
             name: t('home.dailyRecommendations'),

@@ -55,6 +55,9 @@ jobs:
         if: steps.node-modules.outputs.cache-hit != 'true'
         run: npm ci
 
+      - name: Install MusicFree gateway dependencies
+        run: npm ci --prefix musicfree-gateway --ignore-scripts --no-audit
+
       - name: Run typecheck
         run: npm run typecheck
 

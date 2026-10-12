@@ -1,6 +1,7 @@
 
 
 export default {
+  "musicfree": { "browserLikedSongs": "我喜欢", "browserLikedSongsDescription": "保存在当前浏览器的歌曲" },
   "libraryBravais": {
     "suiteName": "Bravais 墙面",
     "homeTitle": "书库",

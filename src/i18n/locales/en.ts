@@ -1,6 +1,7 @@
 
 
 export default {
+  "musicfree": { "browserLikedSongs": "My likes", "browserLikedSongsDescription": "Songs saved in this browser" },
   "libraryBravais": {
     "suiteName": "Bravais wall",
     "homeTitle": "Library",

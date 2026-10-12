@@ -28,6 +28,7 @@ export type OnlineHomeFeedDeps = {
     }>;
     songCoverUrl(song: SongResult | undefined, providerId: string): string | undefined;
     supportsDailySongs?(providerId: string): boolean;
+    supportsPersonalFm?(providerId: string): boolean;
 };
 
 const sameOwner = (a: LibraryHomeFeedOwner | null, b: LibraryHomeFeedOwner | null) => (
@@ -132,7 +133,7 @@ export const createFavoriteAlbumsFeed = (
 
 /** 电台 feed 资源：私人 FM 与每日推荐只取封面与数量（卡片由 core/model/homeCards 组装）。 */
 export const createRadioFeed = (
-    deps: Pick<OnlineHomeFeedDeps, 'getHomeFeed' | 'songCoverUrl' | 'supportsDailySongs'>,
+    deps: Pick<OnlineHomeFeedDeps, 'getHomeFeed' | 'songCoverUrl' | 'supportsDailySongs' | 'supportsPersonalFm'>,
 ): LibraryHomeFeedResource<LibraryHomeRadioFeed | null> => createHomeFeedResource<LibraryHomeRadioFeed | null>({
     label: 'radio feed',
     empty: null,
@@ -142,6 +143,7 @@ export const createRadioFeed = (
             personalFmCoverUrl: deps.songCoverUrl(personalFm[0], owner.providerId),
             dailyCoverUrl: deps.songCoverUrl(dailySongs[0], owner.providerId) || '',
             dailyCount: dailySongs.length,
+            supportsPersonalFm: deps.supportsPersonalFm?.(owner.providerId) ?? true,
             supportsDailySongs: deps.supportsDailySongs?.(owner.providerId) ?? true,
             recommended: recommendedCollections,
         };

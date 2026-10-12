@@ -4,6 +4,7 @@ on:
   pull_request:
     paths:
       - 'deploy/docker/**'
+      - 'musicfree-gateway/**'
       - 'api-ts/**'
       - 'shared/**'
       - 'src/services/runtimeConfig.ts'

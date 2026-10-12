@@ -3,6 +3,7 @@ import type { LocalSong } from '../types';
 import type { LocalLibraryAssignment, LocalLibraryEntity } from '../types/localLibrary';
 import type { LocalCoverAsset } from '../types/localCover';
 import { migrateLegacyLocalSongRecords } from './localLibraryV8Migration';
+import type { MusicFreeLibraryRecord } from '../types/musicfree';
 
 // src/services/appDatabase.ts
 // Owns the complete typed Dexie schema for local songs, entities, and content-addressed cover assets.
@@ -34,6 +35,7 @@ export class AppDatabase extends Dexie {
   local_library_entities!: Table<LocalLibraryEntity, string>;
   local_library_assignments!: Table<LocalLibraryAssignment, string>;
   local_cover_assets!: Table<LocalCoverAsset, string>;
+  musicfree_library!: Table<MusicFreeLibraryRecord, string>;
 
   constructor(name = APP_DATABASE_NAME) {
     super(name);
@@ -95,6 +97,15 @@ export class AppDatabase extends Dexie {
       local_library_entities: 'id, kind, *normalizedAliases, mergedInto, needsReview, createdAt',
       local_library_assignments: 'songId, *artistEntityIds, albumEntityId, artistOrigin, albumOrigin',
       local_cover_assets: 'id',
+    });
+
+    // Browser-owned favorites are user data, separate from clearable API/media caches.
+    this.version(1).stores({
+      session: '', api_cache: 'key', user_cache: 'key', media_cache: 'key', metadata_cache: 'key',
+      local_music: 'id, localCoverAssetId', theme_registry: 'fingerprint',
+      local_library_entities: 'id, kind, *normalizedAliases, mergedInto, needsReview, createdAt',
+      local_library_assignments: 'songId, *artistEntityIds, albumEntityId, artistOrigin, albumOrigin',
+      local_cover_assets: 'id', musicfree_library: 'providerId',
     });
 
     this.on('versionchange', event => {

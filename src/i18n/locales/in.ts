@@ -1,6 +1,7 @@
 
 
 export default {
+  "musicfree": { "browserLikedSongs": "Favorit saya", "browserLikedSongsDescription": "Lagu tersimpan di browser ini" },
   "libraryBravais": {
     "suiteName": "Dinding Bravais",
     "homeTitle": "Pustaka",

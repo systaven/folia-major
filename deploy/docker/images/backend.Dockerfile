@@ -20,6 +20,8 @@ RUN npm ci --omit=dev
 COPY --from=api-builder /app/api ./api
 COPY shared ./shared
 COPY deploy/docker/backend/server.mjs ./server.mjs
+COPY musicfree-gateway ./musicfree-gateway
+RUN npm ci --omit=dev --ignore-scripts --prefix musicfree-gateway
 
 USER node
 EXPOSE 3000

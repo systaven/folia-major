@@ -14,6 +14,7 @@ import { restoreSavedFoliumSelections } from './mods/folium/missingEntries';
 import { installFoliumCommandPaletteSync } from './mods/folium/commandPaletteSync';
 import { installFoliumHostEvents } from './mods/folium/hostEvents';
 import { installLibrarySuiteChromeCommands } from './library/app/installLibrarySuiteChromeCommands';
+import { initializeMusicFreeProviders } from './services/onlineMusic/musicfreeBootstrap';
 import { installNativeDragGuard } from './utils/nativeDragGuard';
 import { bootNavidromeServerPreset } from './services/navidromeServerPreset';
 import { isNavidromeEnabled } from './services/navidromeService';
@@ -92,10 +93,11 @@ const bootNavidrome = async () => {
 };
 
 // allSettled：mod 加载失败也要等预置写完再渲染，失败原因单独打出来，不吞掉。
-void Promise.allSettled([bootFolium(), bootNavidrome()])
-    .then(([folium, navidrome]) => {
+void Promise.allSettled([bootFolium(), bootNavidrome(), isMainApp ? initializeMusicFreeProviders() : Promise.resolve()])
+    .then(([folium, navidrome, musicfree]) => {
         if (folium.status === 'rejected') console.error('[Bootstrap] Folium boot failed:', folium.reason);
         if (navidrome.status === 'rejected') console.warn('[Navidrome] Server preset boot failed:', navidrome.reason);
+        if (musicfree.status === 'rejected') console.warn('[MusicFree] Gateway initialization failed:', musicfree.reason);
     })
     .finally(() => {
         void initializeLocalCoverRuntime().finally(renderApp);

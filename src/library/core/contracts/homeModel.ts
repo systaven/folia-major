@@ -36,7 +36,7 @@ export type LibraryHomeTabView = {
 };
 
 /** 在线 provider 的账户视图（规则见 core/model/onlineProviderAccountView）。 */
-export type LibraryHomeAccountView = 'resolving' | 'guest' | 'authenticated' | 'accountless';
+export type LibraryHomeAccountView = 'resolving' | 'guest' | 'authenticated' | 'accountless' | 'public';
 
 /** 当前在线来源：provider、账户、能用哪些页签。 */
 export type LibraryHomeOnlineSource = {
@@ -100,6 +100,7 @@ export type LibraryHomeRadioFeed = {
     dailyCount: number;
     /** 未声明时沿用旧 feed 的支持语义；默认环境装配会明确提供实际 provider 能力。 */
     supportsDailySongs?: boolean;
+    supportsPersonalFm?: boolean;
     recommended: ProviderCollection[];
 };
 

@@ -3,6 +3,7 @@ import { fileURLToPath } from 'url';
 import { type ConfigEnv, type UserConfig, type ViteDevServer } from 'vite';
 import react from '@vitejs/plugin-react';
 import { commandPinyinPlugin } from './dev/pinyin/commandPinyinPlugin.mjs';
+import { musicFreePreviewPlugin } from './dev/musicfree/previewPlugin.mjs';
 import { normalizeBuildCommit, resolveBuildKind, resolveBuildRepo } from './dev/build/buildIdentity.mjs';
 import { VitePWA } from 'vite-plugin-pwa';
 import { execSync } from 'child_process';
@@ -228,6 +229,10 @@ export default async function viteConfig(_config: ConfigEnv): Promise<UserConfig
     server: {
       port: 3000,
       host: '0.0.0.0',
+      // Keep MusicFree requests same-origin in previews, including HTTPS Codespaces forwarding.
+      proxy: process.env.MUSICFREE_DEV_GATEWAY ? {
+        '/api/musicfree': { target: process.env.MUSICFREE_DEV_GATEWAY, changeOrigin: true },
+      } : undefined,
       watch: {
         // Build output and model weights are not sources, and watching them breaks packaging: the
         // watcher opens a handle on every directory it finds, and electron-builder packages by
@@ -239,6 +244,7 @@ export default async function viteConfig(_config: ConfigEnv): Promise<UserConfig
     },
     plugins: [
       devLyricProxyPlugin(),
+      musicFreePreviewPlugin(),
       commandPinyinPlugin(),
       react(),
       VitePWA({

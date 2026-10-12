@@ -29,6 +29,8 @@ export type PlaybackSourceRef =
     | { kind: 'stage'; mediaId: string };
 
 export interface ProviderCapabilities {
+    /** Catalog and browser-owned library are usable without an upstream account. */
+    publicLibrary?: boolean;
     search: boolean;
     playback: boolean;
     lyrics: boolean;
@@ -64,6 +66,7 @@ export interface ProviderAccountSummary {
     availability: ProviderAvailability;
     /** False for a provider with no account at all (a Folium mod source): it is used without signing in. Absent means true. */
     requiresAccount?: boolean;
+    hasPublicLibrary?: boolean;
     status: 'unknown' | 'authenticated' | 'anonymous' | 'error';
     user: ProviderUser | null;
     collections: ProviderCollection[];

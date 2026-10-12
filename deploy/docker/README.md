@@ -89,6 +89,14 @@ docker compose up -d --force-recreate gateway backend
 
 网易云和酷狗镜像默认不把浏览器或 Docker 私网地址写入上游请求，音乐平台会根据连接本身识别 NAS 的公网出口。只有兼容旧部署行为时才应设置 `FOLIA_FORWARD_CLIENT_IP=true`；这可能使登录记录显示为“局域网”或“未知”。QQ 音乐镜像不转发浏览器 IP，因此不受该开关影响。
 
+## MusicFree 音源
+
+Web API backend 内置可选 MusicFree 插件网关，配置 `MUSICFREE_SOURCES`（JS 插件或 JSON 列表地址）
+与固定 `MUSICFREE_ITEM_SECRET` 后启用。客户端通过 `/api/musicfree` 自动发现源，沿用现有平台切换和搜索界面。
+插件执行、封面代理、带请求头的音频与 Range 请求在服务端处理。源码改动未发布时需使用
+`compose.build.yaml` 本地构建 backend 与 gateway；部署步骤和支持边界见
+[`MusicFree 网关说明`](../../musicfree-gateway/README.md)。
+
 ## QQ 音乐服务
 
 `qq-api` 由 npm 包 `@yakult-green-tea/qq-music-api` 提供，网页端通过 gateway 的 `/qq/` 访问，支持 QQ 扫码和微信扫码两种登录方式。独立部署方式、环境变量表、serverless 支持情况与常见错误见 [`qq-api/README.md`](./qq-api/README.md)。

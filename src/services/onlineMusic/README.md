@@ -20,6 +20,11 @@ UI / hooks / stores / app services
 当前 registry 注册 `netease`、`kugou`、`qq` 和桌面端的 `bodian`。波点接入状态、接口与剩余验收见
 [`docs/bodian.md`](../../../docs/bodian.md)；支持喜欢与自建歌单歌曲增删，收藏写入尚未实现。Navidrome 是独立的 Subsonic 服务，入口是 `src/services/navidromeService.ts`，不属于 Omni provider。
 
+Web 可通过 MusicFree 网关动态注册 `musicfree.*` provider：`musicfreeBootstrap.ts` 发现源，
+`musicfreeProvider.ts` 将搜索、播放、歌词、公开歌单／排行榜和浏览器收藏转换成 Omni 契约，`musicfreeTransport.ts` 仅连接网关，
+`musicfreeNormalize.ts` 保存插件原始歌曲字段与复合身份。配置与能力边界见
+[`musicfree-gateway/README.md`](../../../musicfree-gateway/README.md)。插件在服务端运行，不在浏览器执行。
+
 扫码登录的分工：provider（`neteaseProvider.ts`、`qqProvider.ts`）把后端的响应翻译成 `QrLoginState`，失败时带上后端原文（`message`）、原始返回字段（`detail`，QQ 的失败阶段与原因、上游状态码、退避时长、上一次失败都原样保留）、结构化原因（`reason`：手机上取消、连接被重置）、冷却（`retryAfterMs`）以及「网络层瞬时失败」（`transient`，没拿到上游回应、二维码仍有效）；要码与生成二维码拿不到 key / 图片时直接抛错，不再交出空值。provider 不持有任何扫码的模块级状态：一轮扫码的步骤、代次、时间线都在 Library Core 的 `core/services/providerLoginSession.ts`。会话在登录失败后自动调用 `omni.runQrLoginSelfCheck` 跑一次主动自检（在手机上取消除外），结论由 `core/model/loginSelfCheckRules.ts` 推出、显示在登录界面上，并和时间线、`omni.getQrLoginDiagnostics` 的 provider 段一起进诊断报告。
 
 provider 段的内容来自主进程的内嵌后端快照（`loginBackendDiagnostics.ts` 排版，`electron/loginBackendIpc.cjs` 的 `get-login-diagnostics`）：应用与系统环境、凭据加密后端、后端状态、每一轮拉起的步骤（耗时、结果、错误原文）、上游连接记录（`electron/networkRecorder.cjs`：连了哪个地址、v4 还是 v6、TCP / TLS 耗时、断在哪一步、Node 错误码），网易另有每次登录请求的记录与扫码身份，QQ 另有包内扫码服务的原始失败（`electron/qqBackend.cjs` 挂在 `failSession` / `failBootstrap` 上的钩子）与 `qq-auth.*` 事件。报告不做隐私脱敏（IP、错误原文都保留），登录界面如实告知报告收集了哪些数据；登录凭据（cookie、token、session）的值从不进入记录。网页版没有主进程，provider 段只有会话状态，自检只检查远端 API 能不能连上（`loginSelfCheck.ts`）。

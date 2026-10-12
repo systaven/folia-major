@@ -137,6 +137,7 @@ export const omni = {
                 shortName: provider.shortName || provider.displayName,
                 availability: provider.getAvailability?.() ?? { configured: true },
                 requiresAccount: provider.capabilities.auth,
+                hasPublicLibrary: provider.capabilities.publicLibrary === true,
                 status: account?.status || 'unknown',
                 user: account?.user || null,
                 collections: account?.collections || [],
@@ -183,6 +184,10 @@ export const omni = {
 
     getProviderCapabilities(providerId: OmniProviderId): OmniProviderCapabilities {
         return requireOnlineMusicProvider(providerId).capabilities;
+    },
+
+    supportsPersonalFm(providerId: OmniProviderId): boolean {
+        return typeof requireOnlineMusicProvider(providerId).recommendations?.getPersonalFm === 'function';
     },
 
     supportsDailySongs(providerId: OmniProviderId): boolean {

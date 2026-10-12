@@ -70,6 +70,11 @@ describe('online home cards', () => {
         expect(cards[2].raw).toMatchObject({ id: 'r1', description: 'Curator', summary: 'Curator' });
     });
 
+    it('omits unsupported personal FM and daily songs for public catalog providers', () => {
+        const cards = buildOnlineRadioCards({ dailyCoverUrl: '', dailyCount: 0, supportsPersonalFm: false, supportsDailySongs: false, recommended: [collection({ id: 'public' })] }, { t });
+        expect(cards.map(card => card.id)).toEqual(['public']);
+    });
+
     it('the FM card shows the current FM mode when the provider has modes', () => {
         const feed = { dailyCoverUrl: '', dailyCount: 0, recommended: [] };
         expect(buildOnlineRadioCards(feed, { t, personalFmModeLabel: 'Mode X' })[0].description).toBe('Mode X');

@@ -35,7 +35,7 @@ export const useLibraryHomeOnline = (
         resources,
         tab,
         providerId: online.providerId,
-        userId: online.user?.id ?? null,
+        userId: online.user?.id ?? (online.accountView === 'public' ? 'public' : null),
         canUseAlbums: online.canUseAlbums,
         canUseRadio: online.canUseRadio,
     });

@@ -3,6 +3,7 @@ import generateTheme from '/app/api/generate-theme.js';
 import generateOpenAiTheme from '/app/api/generate-theme_openai.js';
 import lyricProxy from '/app/api/lyric-proxy.js';
 import segmentLyrics from '/app/api/segment-lyrics.js';
+import { createMusicFreeGateway, configuredMusicFreeSources } from './musicfree-gateway/gateway.mjs';
 
 // 当前文件：把现有 Vercel 风格处理器装配为 Docker 常驻 HTTP 服务。
 //
@@ -92,6 +93,13 @@ const port = Number(process.env.PORT || 3000);
 
 app.disable('x-powered-by');
 app.set('trust proxy', true);
+
+const musicfree = createMusicFreeGateway({ sources: configuredMusicFreeSources() });
+// Before body parsers: the MusicFree bridge consumes its own bounded JSON requests and streams assets.
+app.use(async (req, res, next) => {
+    try { if (!await musicfree.handle(req, res)) next(); }
+    catch (error) { next(error); }
+});
 
 const jsonBody = express.json({ limit: REQUEST_BODY_LIMIT });
 const textBody = express.text({ type: ['text/*', 'application/xml'], limit: REQUEST_BODY_LIMIT });
