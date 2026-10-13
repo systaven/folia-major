@@ -3,9 +3,13 @@ import { createServer, type Server } from 'node:http';
 import { mkdtemp, writeFile, rm } from 'node:fs/promises';
 import { tmpdir } from 'node:os';
 import { join } from 'node:path';
+import { execFile } from 'node:child_process';
+import { promisify } from 'node:util';
+import { gzipSync } from 'node:zlib';
 import { createMusicFreeGateway } from '../../../musicfree-gateway/gateway.mjs';
 import { pluginId } from '../../../musicfree-gateway/sources.mjs';
 import { createPluginHost } from '../../../musicfree-gateway/pluginHost.mjs';
+import { createAssetProxy } from '../../../musicfree-gateway/assets.mjs';
 import { createMusicFreeProvider } from '@/services/onlineMusic/musicfreeProvider';
 import type { MusicFreeProviderDescriptor } from '@/types/musicfree';
 
@@ -23,6 +27,21 @@ const listen = async (server: Server): Promise<string> => {
 };
 
 describe('MusicFree Web gateway', () => {
+    it('streams decoded artwork without forwarding a stale compressed content length', async () => {
+        const body = Buffer.from('<svg xmlns="http://www.w3.org/2000/svg" width="16" height="16"></svg>');
+        const encoded = gzipSync(body);
+        const upstream = await listen(createServer((_req, res) => {
+            res.writeHead(200, { 'Content-Type': 'image/svg+xml', 'Content-Encoding': 'gzip', 'Content-Length': encoded.length });
+            res.end(encoded);
+        }));
+        const assets = createAssetProxy();
+        const ticket = assets.issue(upstream).url.split('/').pop()!;
+        const base = await listen(createServer((req, res) => { void assets.serve(ticket, req, res); }));
+        const response = await fetch(base);
+        expect(response.status).toBe(200);
+        expect(response.headers.get('content-length')).toBeNull();
+        expect(await response.text()).toBe(body.toString());
+    });
     it('loads a JSON list and executes CommonJS search, detail, lyrics and header-protected ranged audio', async () => {
         const upstream = await listen(createServer((req, res) => {
             if (req.headers['x-plugin'] !== 'fixture') { res.writeHead(403); res.end(); return; }
@@ -128,6 +147,22 @@ describe('MusicFree Web gateway', () => {
         const page = await host.call('search', ['Fixture', 1, 'music']);
         expect(page.data[0]).toMatchObject({ emptySettings: true, axiosDefault: true, webdav: 'function',
             encoded: 'aGk=', query: 'page=1' });
+    });
+
+    it('loads ESM dependencies even when the runtime disables require(ESM)', async () => {
+        const moduleUrl = new URL('../../../musicfree-gateway/pluginHost.mjs', import.meta.url).href;
+        const script = `const webdav = require('webdav'); module.exports = { platform: 'ESM',
+            search() { return { data: [typeof webdav.createClient] }; } };`;
+        const code = `import { createPluginHost } from ${JSON.stringify(moduleUrl)};
+            const host = await createPluginHost(${JSON.stringify(script)}, 'esm.js');
+            try { console.log(JSON.stringify(await host.call('search', []))); } finally { await host.close(); }`;
+        const dir = await mkdtemp(join(tmpdir(), 'folia-mf-esm-'));
+        cleanup.push(() => rm(dir, { recursive: true, force: true }));
+        const entry = join(dir, 'check.mjs');
+        await writeFile(entry, code);
+        const { stdout } = await promisify(execFile)(process.execPath,
+            ['--no-experimental-require-module', entry]);
+        expect(JSON.parse(stdout)).toEqual({ data: ['function'] });
     });
 
     it('recovers a failed worker on the next requests without replaying the timed-out call', async () => {

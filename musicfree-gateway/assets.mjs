@@ -2,11 +2,12 @@ import { randomBytes, createHash, createCipheriv, createDecipheriv } from 'node:
 import { Readable } from 'node:stream';
 import { pipeline } from 'node:stream/promises';
 import { ephemeralSecret } from './itemProof.mjs';
+import { fetchAssetResponse } from './assetFetch.mjs';
 
 // musicfree-gateway/assets.mjs
 // Proxy only plugin-issued assets; opaque tickets keep the public endpoint from accepting arbitrary URLs.
 
-export function createAssetProxy({ fetchAsset = fetch, now = Date.now, ttlMs = 86400000,
+export function createAssetProxy({ fetchAsset = fetchAssetResponse, now = Date.now, ttlMs = 86400000,
     secret = process.env.MUSICFREE_ITEM_SECRET || ephemeralSecret } = {}) {
     const key = createHash('sha256').update(secret).digest();
     const decode = token => {

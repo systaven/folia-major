@@ -3,22 +3,29 @@
 
 export async function recommendedCollections(plugin, limit) {
     const results = [];
+    const failures = [];
     if (plugin.metadata.methods.includes('getRecommendSheetsByTag')) {
-        let tag = { id: '', title: '全部' };
-        if (plugin.metadata.methods.includes('getRecommendSheetTags')) {
-            const tags = await plugin.call('getRecommendSheetTags', []);
-            tag = tags?.pinned?.[0] ?? tags?.data?.flatMap(group => group.data ?? [])?.[0] ?? tag;
-        }
-        const page = await plugin.call('getRecommendSheetsByTag', [tag, 1]);
-        if (!page || !Array.isArray(page.data)) throw new Error('Invalid recommended playlist response');
-        results.push(...page.data.map(item => ({ item, kind: 'playlist' })));
+        try {
+            let tag = { id: '', title: '全部' };
+            if (plugin.metadata.methods.includes('getRecommendSheetTags')) {
+                const tags = await plugin.call('getRecommendSheetTags', []);
+                tag = tags?.pinned?.[0] ?? tags?.data?.flatMap(group => group.data ?? [])?.[0] ?? tag;
+            }
+            const page = await plugin.call('getRecommendSheetsByTag', [tag, 1]);
+            if (!page || !Array.isArray(page.data)) throw new Error('Invalid recommended playlist response');
+            results.push(...page.data.map(item => ({ item, kind: 'playlist' })));
+        } catch (error) { failures.push(error); }
     }
     if (results.length < limit && plugin.metadata.methods.includes('getTopLists')) {
-        const groups = await plugin.call('getTopLists', []);
-        if (!Array.isArray(groups)) throw new Error('Invalid top list response');
-        results.push(...groups.flatMap(group => (Array.isArray(group.data) ? group.data : [group])
-            .map(item => ({ item, kind: 'top' }))));
+        try {
+            const groups = await plugin.call('getTopLists', []);
+            if (!Array.isArray(groups)) throw new Error('Invalid top list response');
+            results.push(...groups.flatMap(group => (Array.isArray(group.data) ? group.data : [group])
+                .map(item => ({ item, kind: 'top' }))));
+        } catch (error) { failures.push(error); }
     }
+    if (!results.length && failures.length) throw failures[0];
+    if (failures.length) console.warn('[MusicFree] Partial catalog unavailable', { provider: plugin.metadata.name });
     return results.slice(0, limit);
 }
 

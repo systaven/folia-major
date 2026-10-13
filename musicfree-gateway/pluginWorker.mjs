@@ -1,27 +1,27 @@
 import { parentPort, workerData } from 'node:worker_threads';
-import { createRequire } from 'node:module';
 import vm from 'node:vm';
 
 // musicfree-gateway/pluginWorker.mjs
 // Runs one administrator-configured CommonJS plugin; VM is compatibility, not a security sandbox.
 
-const requirePackage = createRequire(import.meta.url);
 const allowedPackages = new Set(['axios', 'big-integer', 'cheerio', 'crypto-js', 'dayjs', 'he', 'qs', 'webdav']);
 const packages = new Map();
-// Aggregate subscriptions contain dozens of plugins. Loading every dependency in
-// every worker wastes memory even for plugins that only use axios.
+// Import only referenced packages, asynchronously and BEFORE the VM's deadline.
+// Vercel may disable require(ESM), and module initialization is not plugin execution.
+const dependencies = new Set([...workerData.script.matchAll(/\brequire\s*\(\s*(['"])([^'"]+)\1\s*\)/g)]
+    .map(match => match[2]).filter(name => allowedPackages.has(name)));
+for (const name of dependencies) {
+    const imported = await import(name);
+    let value = imported.default ?? imported;
+    if (name === 'axios') {
+        value = value.create({ timeout: 12000 });
+        value.default = value;
+    }
+    packages.set(name, value);
+}
 const loadPackage = name => {
     if (!allowedPackages.has(name)) throw new Error(`Unsupported MusicFree dependency: ${name}`);
-    if (!packages.has(name)) {
-        const imported = requirePackage(name);
-        let value = imported.default ?? imported;
-        if (name === 'axios') {
-            value = value.create({ timeout: 12000 });
-            // Both require('axios') and require('axios').default occur in published plugins.
-            value.default = value;
-        }
-        packages.set(name, value);
-    }
+    if (!packages.has(name)) throw new Error(`MusicFree dependency must use a literal require: ${name}`);
     return packages.get(name);
 };
 // Public plugins also access env as a global, rather than as a method argument.

@@ -23,6 +23,18 @@ export async function loadPlugins(sources, { read = readSource, createHost = cre
     const plugins = new Map();
     const errors = [];
     const visited = new Set();
+    let initializing = 0;
+    const waiting = [];
+    // Limit CPU contention during cold starts; queued hosts start their deadline only on admission.
+    const initialize = async (content, source) => {
+        if (initializing >= 2) await new Promise(resolve => waiting.push(resolve));
+        else initializing += 1;
+        try { return await createHost(content, source); }
+        finally {
+            if (waiting.length) waiting.shift()();
+            else initializing -= 1;
+        }
+    };
     const load = async (source, depth = 0) => {
         if (visited.has(source)) return;
         if (visited.size >= 64 || depth > 4) { errors.push({ source, message: 'MusicFree source limit exceeded' }); return; }
@@ -43,7 +55,7 @@ export async function loadPlugins(sources, { read = readSource, createHost = cre
                 }));
                 return;
             }
-            const host = await createHost(content, source);
+            const host = await initialize(content, source);
             plugins.set(pluginId(source), { ...host, source });
         } catch (error) { errors.push({ source, message: error.message }); }
     };
