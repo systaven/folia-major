@@ -57,6 +57,16 @@ describe('MusicFree Omni adapter', () => {
         await expect(provider.search!.searchSongs('Song', 10, 0)).rejects.toThrow('upstream failed');
     });
 
+    it('preserves a structured invalid audio response instead of treating it as a network outage', async () => {
+        vi.stubGlobal('fetch', vi.fn().mockResolvedValue(new Response(JSON.stringify({
+            error: '音源返回了无效播放地址', code: 'invalid-response',
+        }), { status: 502 })));
+        const provider = createMusicFreeProvider(descriptor, '/api/musicfree');
+        await expect(provider.playback!.getAudioSource(provider.normalizeSong(payload), 'standard')).rejects.toMatchObject({
+            code: 'invalid-response', httpStatus: 502, message: '音源返回了无效播放地址',
+        });
+    });
+
     it.each([502, 403])('preserves HTTP %s audio errors instead of returning an unavailable song', async status => {
         vi.stubGlobal('fetch', vi.fn().mockResolvedValue(new Response(JSON.stringify({ error: 'Gateway failed' }), { status })));
         const provider = createMusicFreeProvider(descriptor, '/api/musicfree');

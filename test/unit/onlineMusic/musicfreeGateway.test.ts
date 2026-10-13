@@ -177,6 +177,40 @@ describe('MusicFree Web gateway', () => {
         await expect(host.call('search', ['after-close'])).rejects.toThrow('Gateway closed');
     }, 10000);
 
+    it('rejects placeholder audio URLs without poisoning later playback requests', async () => {
+        const log = vi.spyOn(console, 'error').mockImplementation(() => {});
+        const source = 'placeholder.js';
+        const host = await createPluginHost(`module.exports = {
+            platform: 'Placeholder', search() { return { data: [{ id: 1 }], isEnd: true }; },
+            getMediaSource(item, quality) {
+                if (quality === 'low') return null;
+                return { url: quality === 'standard' ? 'None' : 'https://audio.test/song.mp3?token=do-not-log' };
+            }
+        };`, source);
+        const id = pluginId(source);
+        const gateway = createMusicFreeGateway({ loader: async () => ({ plugins: new Map([[id, host]]), errors: [], close: () => host.close() }) });
+        cleanup.push(() => gateway.close());
+        const base = await listen(createServer((req, res) => gateway.handle(req, res)));
+        const call = (method: string, body: unknown) => fetch(`${base}/api/musicfree/providers/${id}/${method}`, {
+            method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify(body),
+        });
+        const page = await (await call('search', { query: 'Song', limit: 1, offset: 0 })).json();
+        const response = await call('audio', { ...page.items[0], quality: 'standard' });
+        expect(response.status).toBe(502);
+        expect(await response.json()).toMatchObject({ code: 'invalid-response', error: expect.stringContaining('无效播放地址') });
+        expect(log).toHaveBeenCalledWith('[MusicFree] request failed', {
+            providerId: id, operation: 'audio', code: 'ERR_MUSICFREE_INVALID_AUDIO_URL', upstreamStatus: undefined,
+        });
+        // A valid response from the same worker remains usable after the failed track.
+        const recovered = await call('audio', { ...page.items[0], quality: 'high' });
+        expect(recovered.status).toBe(200);
+        expect((await recovered.json()).url).toMatch(/^\/api\/musicfree\/assets\//);
+        const unsupported = await call('audio', { ...page.items[0], quality: 'low' });
+        expect(unsupported.status).toBe(200);
+        expect(await unsupported.json()).toBeNull();
+        expect(JSON.stringify(log.mock.calls)).not.toContain('do-not-log');
+    });
+
     it('logs the provider, operation and upstream status without logging plugin credentials', async () => {
         const log = vi.spyOn(console, 'error').mockImplementation(() => {});
         const upstream = await listen(createServer((_req, res) => { res.writeHead(503); res.end('Unavailable'); }));

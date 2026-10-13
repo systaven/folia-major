@@ -102,6 +102,17 @@ export function createMusicFreeGateway({ sources = [], origin = '', loader = loa
                     if (!body.item || body.item.id == null || !['low', 'standard', 'high', 'super'].includes(body.quality)) throw new Error('Invalid audio parameters');
                     const result = plugin.metadata.methods.includes('getMediaSource')
                         ? await plugin.call('getMediaSource', [body.item, body.quality]) : body.item.url ? { url: body.item.url } : null;
+                    // Some upstreams return HTTP 200 with placeholders such as "None".
+                    // Preserve an upstream failure rather than marking the song as removed.
+                    if (result?.url != null) {
+                        let target;
+                        try { if (typeof result.url === 'string') target = new URL(result.url); } catch {}
+                        if (!target || !['http:', 'https:'].includes(target.protocol)) {
+                            throw Object.assign(new Error('音源返回了无效播放地址，暂时无法播放；请稍后重试或切换音源'), {
+                                code: 'ERR_MUSICFREE_INVALID_AUDIO_URL',
+                            });
+                        }
+                    }
                     send(res, 200, result?.url ? assets.issue(result.url, result.headers, result.userAgent) : null);
                     break;
                 }
@@ -124,7 +135,9 @@ export function createMusicFreeGateway({ sources = [], origin = '', loader = loa
                 code: typeof error.code === 'string' && /^(E[A-Z0-9_]+|ERR_[A-Z0-9_]+)$/.test(error.code) ? error.code : 'ERR_MUSICFREE_PLUGIN',
                 upstreamStatus: Number.isInteger(error.upstreamStatus) ? error.upstreamStatus : undefined,
             });
-            send(res, 502, { error: error.message || 'MusicFree request failed' });
+            send(res, 502, { error: error.message || 'MusicFree request failed',
+                ...(error.code === 'ERR_MUSICFREE_INVALID_AUDIO_URL' ? { code: 'invalid-response' } : {}),
+            });
         }
         return true;
     };

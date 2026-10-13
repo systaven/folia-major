@@ -25,10 +25,10 @@ export async function requestMusicFree<T>(base: string, path: string, body?: unk
             signal: AbortSignal.timeout(45000),
         });
     } catch { throw new OnlineProviderError('network', 'MusicFree gateway is unreachable'); }
-    let data: T & { error?: string };
+    let data: T & { error?: string; code?: string };
     try { data = await response.json(); }
     catch { throw new OnlineProviderError('invalid-response', 'MusicFree gateway did not return JSON'); }
-    if (!response.ok) throw new OnlineProviderError(response.status === 403 ? 'invalid-response' : 'network',
+    if (!response.ok) throw new OnlineProviderError(response.status === 403 || data?.code === 'invalid-response' ? 'invalid-response' : 'network',
         data?.error || `MusicFree HTTP ${response.status}`, undefined, undefined, response.status);
     return data;
 }
