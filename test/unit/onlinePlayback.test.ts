@@ -83,6 +83,20 @@ describe('online audio ReplayGain plumbing', () => {
         expect(updatePrefetchedAudioUrlMock).not.toHaveBeenCalled();
     });
 
+    it.each(['network', 'invalid-response', 'unsupported'] as const)('does not label %s failures as a removed song', async code => {
+        const error = new OnlineProviderError(code, 'MusicFree HTTP 502', 'musicfree.fixture');
+        sourceMock.mockRejectedValueOnce(error);
+        await expect(loadOnlineSongAudioSource(song, 'high', null)).rejects.toBe(error);
+        expect(updatePrefetchedAudioUrlMock).not.toHaveBeenCalled();
+    });
+
+    it('preserves unexpected provider errors and still recognizes a missing audio source', async () => {
+        const error = new Error('Worker failed');
+        sourceMock.mockRejectedValueOnce(error).mockResolvedValueOnce(null);
+        await expect(loadOnlineSongAudioSource(song, 'high', null)).rejects.toBe(error);
+        await expect(loadOnlineSongAudioSource(song, 'high', null)).resolves.toEqual({ kind: 'unavailable' });
+    });
+
     it('returns provider metadata and stores it with the prefetched URL', async () => {
         sourceMock.mockResolvedValue({
             url: 'https://audio.test/song.flac',

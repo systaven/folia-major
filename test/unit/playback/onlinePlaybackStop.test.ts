@@ -1,5 +1,6 @@
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
 import { PlayerState, type UnifiedSong } from '@/types';
+import { OnlineProviderError } from '@/types/onlineMusic';
 
 // test/unit/playback/onlinePlaybackStop.test.ts — exercise the queue's error branch without a browser or network.
 
@@ -85,5 +86,16 @@ describe('online playback stop conditions', () => {
         await queue.playSong(songs[0], songs);
         expect(window.setTimeout).toHaveBeenCalledOnce();
         expect(queue.pause).not.toHaveBeenCalled();
+    });
+
+    it('shows a playback error for a gateway 502 and never schedules removed-song skipping', async () => {
+        vi.spyOn(console, 'error').mockImplementation(() => {});
+        vi.mocked(loadOnlineSongAudioSource).mockRejectedValue(new OnlineProviderError('network', 'MusicFree HTTP 502'));
+        const queue = controller();
+        await queue.playSong(songs[0], songs);
+        expect(useStatusMessageStore.getState().message).toMatchObject({ type: 'error', text: 'status.playbackError' });
+        expect(window.setTimeout).not.toHaveBeenCalled();
+        expect(loadOnlineSongAudioSource).toHaveBeenCalledOnce();
+        vi.restoreAllMocks();
     });
 });

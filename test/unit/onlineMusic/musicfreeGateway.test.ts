@@ -1,4 +1,4 @@
-import { afterEach, describe, expect, it } from 'vitest';
+import { afterEach, describe, expect, it, vi } from 'vitest';
 import { createServer, type Server } from 'node:http';
 import { mkdtemp, writeFile, rm } from 'node:fs/promises';
 import { tmpdir } from 'node:os';
@@ -13,7 +13,7 @@ import type { MusicFreeProviderDescriptor } from '@/types/musicfree';
 // Real HTTP and worker round trips validate headers, seeking, metadata, paging and failed-plugin isolation.
 
 const cleanup: Array<() => Promise<unknown>> = [];
-afterEach(async () => { for (const close of cleanup.splice(0).reverse()) await close(); });
+afterEach(async () => { for (const close of cleanup.splice(0).reverse()) await close(); vi.restoreAllMocks(); });
 const listen = async (server: Server): Promise<string> => {
     await new Promise<void>(resolve => server.listen(0, '127.0.0.1', resolve));
     cleanup.push(() => new Promise<void>((resolve, reject) => server.close(error => error ? reject(error) : resolve())));
@@ -38,7 +38,8 @@ describe('MusicFree Web gateway', () => {
             async search(query, page) { return { isEnd: page === 3, data: [1,2].map(n => ({
                 id: (page-1)*2+n, aid: crypto.MD5(query).toString(), title: 'Song', artist: 'Artist',
                 album: 'Album', duration: 10, artwork: '${upstream}/cover', custom: 'persist' })) }; },
-            async getRecommendSheetsByTag(tag, page) { return { isEnd: true, data: [{ id: 'sheet', title: 'Public sheet', artwork: '${upstream}/cover' }] }; },
+            async getRecommendSheetTags() { return { pinned: [{ id: 'featured', title: 'Featured' }], data: [] }; },
+            async getRecommendSheetsByTag(tag, page) { if (tag.id !== 'featured') throw new Error('Missing real recommendation tag'); return { isEnd: true, data: [{ id: 'sheet', title: 'Public sheet', artwork: '${upstream}/cover' }] }; },
             async getMusicSheetInfo(item, page) { return { isEnd: page === 2, musicList: [{ id: page, aid: 'sheet', title: 'Track '+page }] }; },
             async getMusicInfo(item) { return { album: 'Detailed album' }; },
             async getLyric(item) { return { rawLrc: '[00:01.00]First\\n[00:03.00]Second' }; },
@@ -109,4 +110,60 @@ describe('MusicFree Web gateway', () => {
         cleanup.push(() => host.close());
         await expect(host.call('search', ['test', 1, 'music'])).rejects.toThrow('timed out');
     }, 10000);
+
+    it('provides MusicFree env globals and method arguments with isolated empty optional settings', async () => {
+        const host = await createPluginHost(`const axios = require('axios'); const webdav = require('webdav');
+            const qs = require('qs'); module.exports = { platform: 'Host API',
+            search(query, page, type, callEnv) {
+                if (callEnv !== env) throw new Error('Missing method environment');
+                const values = env.getUserVariables();
+                values.mutated = true;
+                return { isEnd: true, data: [{ id: 1, title: query,
+                    emptySettings: Object.keys(env.getUserVariables()).length === 0,
+                    axiosDefault: axios === axios.default, webdav: typeof webdav.createClient,
+                    encoded: btoa(atob('aGk=')), query: qs.stringify({ page }) }] };
+            }
+        };`, 'host-api.js');
+        cleanup.push(() => host.close());
+        const page = await host.call('search', ['Fixture', 1, 'music']);
+        expect(page.data[0]).toMatchObject({ emptySettings: true, axiosDefault: true, webdav: 'function',
+            encoded: 'aGk=', query: 'page=1' });
+    });
+
+    it('recovers a failed worker on the next requests without replaying the timed-out call', async () => {
+        const host = await createPluginHost(`module.exports = { platform: 'Recoverable',
+            search(query) { if (query === 'stuck') while (true) {} return { data: [query], isEnd: true }; }
+        };`, 'recoverable.js', 2000);
+        cleanup.push(() => host.close());
+        await expect(host.call('search', ['stuck'])).rejects.toMatchObject({ code: 'ERR_MUSICFREE_TIMEOUT' });
+        const results = await Promise.all([host.call('search', ['first']), host.call('search', ['second'])]);
+        expect(results).toEqual([{ data: ['first'], isEnd: true }, { data: ['second'], isEnd: true }]);
+        await host.close();
+        await expect(host.call('search', ['after-close'])).rejects.toThrow('Gateway closed');
+    }, 10000);
+
+    it('logs the provider, operation and upstream status without logging plugin credentials', async () => {
+        const log = vi.spyOn(console, 'error').mockImplementation(() => {});
+        const upstream = await listen(createServer((_req, res) => { res.writeHead(503); res.end('Unavailable'); }));
+        const source = 'diagnostics.js';
+        const host = await createPluginHost(`const axios = require('axios'); module.exports = {
+            platform: 'Diagnostics', search() { return { data: [{ id: 1, secret: 'do-not-log' }], isEnd: true }; },
+            async getMediaSource() { return (await axios.get('${upstream}/audio?token=do-not-log')).data; }
+        };`, source);
+        const id = pluginId(source);
+        const gateway = createMusicFreeGateway({ loader: async () => ({ plugins: new Map([[id, host]]), errors: [], close: () => host.close() }) });
+        cleanup.push(() => gateway.close());
+        const base = await listen(createServer((req, res) => gateway.handle(req, res)));
+        const call = (method: string, body: unknown) => fetch(`${base}/api/musicfree/providers/${id}/${method}`, {
+            method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify(body),
+        });
+        const page = await (await call('search', { query: 'Song', limit: 1, offset: 0 })).json();
+        const response = await call('audio', { ...page.items[0], quality: 'high' });
+        expect(response.status).toBe(502);
+        expect(await response.json()).toEqual({ error: 'Request failed with status code 503' });
+        expect(log).toHaveBeenCalledWith('[MusicFree] request failed', {
+            providerId: id, operation: 'audio', code: 'ERR_BAD_RESPONSE', upstreamStatus: 503,
+        });
+        expect(JSON.stringify(log.mock.calls)).not.toContain('do-not-log');
+    });
 });

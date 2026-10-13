@@ -56,4 +56,12 @@ describe('MusicFree Omni adapter', () => {
         const provider = createMusicFreeProvider(descriptor, '/api/musicfree');
         await expect(provider.search!.searchSongs('Song', 10, 0)).rejects.toThrow('upstream failed');
     });
+
+    it.each([502, 403])('preserves HTTP %s audio errors instead of returning an unavailable song', async status => {
+        vi.stubGlobal('fetch', vi.fn().mockResolvedValue(new Response(JSON.stringify({ error: 'Gateway failed' }), { status })));
+        const provider = createMusicFreeProvider(descriptor, '/api/musicfree');
+        await expect(provider.playback!.getAudioSource(provider.normalizeSong(payload), 'high')).rejects.toMatchObject({
+            code: status === 403 ? 'invalid-response' : 'network', httpStatus: status, message: 'Gateway failed',
+        });
+    });
 });

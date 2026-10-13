@@ -51,6 +51,11 @@ export async function loadOnlineSongAudioSource(
     try {
         source = await omni.getAudioSource(song, audioQuality);
     } catch (error) {
+        // A gateway/transport failure says nothing about whether the track was removed.
+        // Preserve it for the queue's playback-error path instead of auto-skipping songs.
+        if (!(error instanceof OnlineProviderError) || ![
+            'unavailable', 'not-playable', 'preview-only', 'region-restricted', 'auth-required',
+        ].includes(error.code)) throw error;
         console.warn('[OnlinePlayback] Provider audio source is temporarily unavailable', error);
         return { kind: 'unavailable', ...(error instanceof OnlineProviderError ? { reason: error.code } : {}) };
     }

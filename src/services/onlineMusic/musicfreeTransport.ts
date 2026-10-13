@@ -28,6 +28,7 @@ export async function requestMusicFree<T>(base: string, path: string, body?: unk
     let data: T & { error?: string };
     try { data = await response.json(); }
     catch { throw new OnlineProviderError('invalid-response', 'MusicFree gateway did not return JSON'); }
-    if (!response.ok) throw new OnlineProviderError('network', data?.error || `MusicFree HTTP ${response.status}`);
+    if (!response.ok) throw new OnlineProviderError(response.status === 403 ? 'invalid-response' : 'network',
+        data?.error || `MusicFree HTTP ${response.status}`, undefined, undefined, response.status);
     return data;
 }

@@ -36,6 +36,8 @@ export function createMusicFreeGateway({ sources = [], origin = '', loader = loa
     const decorate = (providerId, item) => ({ item, proof: proofs.sign(providerId, item),
         artworkUrl: (item?.artwork || item?.coverImg) ? assets.issue(item.artwork || item.coverImg).url : undefined });
     const handle = async (req, res) => {
+        let providerId;
+        let operation;
         const pathname = new URL(req.url, 'http://localhost').pathname;
         if (!pathname.startsWith('/api/musicfree/')) return false;
         if (origin && req.headers.origin === origin) {
@@ -56,6 +58,8 @@ export function createMusicFreeGateway({ sources = [], origin = '', loader = loa
             }
             const route = pathname.match(/^\/api\/musicfree\/providers\/(musicfree\.[a-f0-9]+)\/(search|detail|audio|lyrics|recommendations|tracks)$/);
             if (!route || req.method !== 'POST') { send(res, 404, { error: 'Unknown MusicFree endpoint' }); return true; }
+            providerId = route[1];
+            operation = route[2];
             const plugin = plugins.get(route[1]);
             if (!plugin) { send(res, 404, { error: 'MusicFree provider is not configured' }); return true; }
             const body = await readBody(req);
@@ -114,7 +118,14 @@ export function createMusicFreeGateway({ sources = [], origin = '', loader = loa
                     break;
                 }
             }
-        } catch (error) { send(res, 502, { error: error.message || 'MusicFree request failed' }); }
+        } catch (error) {
+            // Log only diagnostic fields: plugin exceptions and request items can contain credentials.
+            console.error('[MusicFree] request failed', { providerId, operation,
+                code: typeof error.code === 'string' && /^(E[A-Z0-9_]+|ERR_[A-Z0-9_]+)$/.test(error.code) ? error.code : 'ERR_MUSICFREE_PLUGIN',
+                upstreamStatus: Number.isInteger(error.upstreamStatus) ? error.upstreamStatus : undefined,
+            });
+            send(res, 502, { error: error.message || 'MusicFree request failed' });
+        }
         return true;
     };
     return { handle, async close() { if (loaded) await (await loaded).close(); } };

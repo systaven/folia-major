@@ -116,3 +116,19 @@ npm run typecheck
 - `MUSICFREE_ITEM_SECRET`：生成一个固定随机值，并作为加密环境变量保存。所有实例必须使用同一值，收藏与媒体票据才能跨实例验证。
 
 收藏仍保存在当前浏览器；这一版没有接入 Clerk 或跨设备同步。生产构建与编译后的 HTTP 入口已在本地验证，实际 Vercel 发布与线上验证仍需要目标团队的部署权限。
+
+### 播放接口 502 排查
+
+`POST /api/musicfree/providers/<provider>/audio` 返回 502 表示网关或插件调用失败，不能据此认定歌曲已下架。前端会显示播放失败，并保留队列供重试；插件 worker 超时或退出后，下一次请求会重建 worker，不会在同一实例里持续复用失效进程。失败的那次调用不会自动重放。
+
+Vercel 函数日志中的 `[MusicFree] request failed` 记录 `providerId`、`operation`、错误码和上游 HTTP 状态，不记录歌曲原始字段、密钥或完整上游 URL。`ERR_MUSICFREE_TIMEOUT` / `ERR_MUSICFREE_WORKER_STOPPED` 指向 worker 故障；`ERR_BAD_REQUEST` / `ERR_BAD_RESPONSE` 配合 `upstreamStatus` 可识别上游拒绝或服务异常。浏览器 Network 的 Response 仍保留网关返回的错误文字。
+
+Huibq 列表中的 `musicfree.c997421dc59d58c22d09` 是小芸音乐，其 0.3.0 插件从 `lxmusicapi.onrender.com` 取播放地址；搜索与播放使用不同上游，所以能搜索不代表能取得音频。Vercel 请求摘要的 `No outgoing requests` 本身不能定位 worker 内的失败原因，应结合函数日志和响应正文。若缺少固定 `MUSICFREE_ITEM_SECRET`，跨实例签名失败返回的是 403，需要设置固定密钥并重新搜索，而不是把它当作上游 502。
+
+### MusicFreePluginsHub 聚合订阅
+
+可将服务端 `MUSICFREE_SOURCES` 设置为 `https://musicfreepluginshub.2020818.xyz/plugins.json`；Vercel 前端继续使用 `VITE_MUSICFREE_API_BASE=/api/musicfree`，并保留固定的 `MUSICFREE_ITEM_SECRET`。修改环境变量和网关代码后需要重新部署。
+
+网关按需加载各插件的依赖，避免大型列表在每个 worker 中重复加载全部依赖。支持插件全局和方法参数中的 `env.getUserVariables()`（未配置时返回空对象）、`atob` / `btoa`，推荐歌单使用插件实际提供的标签。需要私人 Navidrome、WebDAV 账号或 API 密钥的插件不因这些兼容接口而自动获得凭据。
+
+2026-10-12 实测：订阅含 34 个条目，29 个插件可加载，5 个 `music.haitangw.net` 下载地址失败。相同列表的进程 RSS 从约 1.3 GB 降至约 730 MB。`W音乐` 修复了 `env is not defined`，搜索和歌词可用，但所测歌曲的播放结果不是有效 URL。5sing 样本能取得 HTTP 206、`audio/mpeg` 音频及歌词；部分其他插件仍有上游 503/412、页面解析失败或无音频地址。猫耳样本返回 HLS 播放列表，不等同于 Folia 浏览器音频已验证可播放。聚合订阅中的小芸、小秋等仍引用已暂停的 Render 音频服务，因此更换订阅地址不会自动修复这些插件。
