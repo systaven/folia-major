@@ -1,10 +1,24 @@
 import { describe, expect, it, vi } from 'vitest';
-import { loadPlugins } from '../../../musicfree-gateway/sources.mjs';
+import { loadPlugins, configuredMusicFreeVariables, pluginId } from '../../../musicfree-gateway/sources.mjs';
 
 // test/unit/onlineMusic/musicfreeSources.test.ts
 // Aggregate cold starts must admit only two initializers while preserving independent failures.
 
 describe('MusicFree aggregate initialization', () => {
+    it('isolates configured variables by provider and rejects malformed settings without printing values', async () => {
+        const first = 'https://plugins.test/a.js';
+        const second = 'https://plugins.test/b.js';
+        const variables = configuredMusicFreeVariables(JSON.stringify({ [pluginId(first)]: { ikun_key: 'fixture-secret' } }));
+        const createHost = vi.fn(async () => ({ metadata: { name: 'Fixture' }, call: vi.fn(), close: vi.fn() }));
+        const loaded = await loadPlugins([first, second], { read: async () => 'module.exports={}', createHost, userVariables: variables });
+        expect(createHost).toHaveBeenCalledWith('module.exports={}', first, 20000, { ikun_key: 'fixture-secret' });
+        expect(createHost).toHaveBeenCalledWith('module.exports={}', second, 20000, {});
+        expect(JSON.stringify([...loaded.plugins].map(([, host]) => host.metadata))).not.toContain('fixture-secret');
+        expect(() => configuredMusicFreeVariables('fixture-secret')).toThrow('must be a JSON object');
+        expect(() => configuredMusicFreeVariables(JSON.stringify({ [pluginId(first)]: { ikun_key: 123 } }))).toThrow('string values');
+        await loaded.close();
+    });
+
     it('bounds concurrent initialization and loads the remaining plugins after one failure', async () => {
         let active = 0;
         let peak = 0;

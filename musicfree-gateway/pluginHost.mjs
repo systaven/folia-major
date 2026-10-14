@@ -3,8 +3,8 @@ import { Worker } from 'node:worker_threads';
 // musicfree-gateway/pluginHost.mjs
 // Worker lifetime and RPC deadlines keep a broken plugin from blocking the gateway event loop.
 
-export async function createPluginHost(script, source, timeoutMs = 20000) {
-    let host = await createWorkerHost(script, source, timeoutMs);
+export async function createPluginHost(script, source, timeoutMs = 20000, userVariables = {}) {
+    let host = await createWorkerHost(script, source, timeoutMs, userVariables);
     let restarting = null;
     let closed = false;
     return {
@@ -16,7 +16,7 @@ export async function createPluginHost(script, source, timeoutMs = 20000) {
             if (host.failed) {
                 restarting ??= (async () => {
                     await host.close();
-                    const replacement = await createWorkerHost(script, source, timeoutMs);
+                    const replacement = await createWorkerHost(script, source, timeoutMs, userVariables);
                     if (closed) { await replacement.close(); throw new Error('Gateway closed'); }
                     host = replacement;
                 })().finally(() => { restarting = null; });
@@ -34,9 +34,9 @@ export async function createPluginHost(script, source, timeoutMs = 20000) {
 }
 
 /** Start one worker generation and reject its pending calls together on failure. */
-async function createWorkerHost(script, source, timeoutMs) {
+async function createWorkerHost(script, source, timeoutMs, userVariables) {
     const worker = new Worker(new URL('./pluginWorker.mjs', import.meta.url), {
-        workerData: { script, source }, resourceLimits: { maxOldGenerationSizeMb: 128 },
+        workerData: { script, source, userVariables }, resourceLimits: { maxOldGenerationSizeMb: 128 },
     });
     const pending = new Map();
     let seq = 0;

@@ -165,6 +165,27 @@ describe('MusicFree Web gateway', () => {
         expect(JSON.parse(stdout)).toEqual({ data: ['function'] });
     });
 
+    it('uses configured plugin variables without exposing them in metadata or forwarding auth to other hosts', async () => {
+        const host = await createPluginHost(`const axios = require('axios');
+            axios.defaults.adapter = async config => ({ status: 200, headers: {}, config,
+                data: { cookie: config.headers.get('Cookie') } });
+            module.exports = { platform: 'Configured', async search(url, cookie) {
+                const settings = env.getUserVariables();
+                settings.music_u = 'mutated';
+                const response = await axios.get(url, { headers: { Cookie: cookie } });
+                return { configured: env.getUserVariables().music_u === 'MUSIC_A=fixture-secret',
+                    authorized: response.data.cookie === 'os=pc; MUSIC_A=fixture-secret',
+                    unchanged: response.data.cookie === cookie };
+            } };`, 'configured.js', 20000, { music_u: 'MUSIC_A=fixture-secret' });
+        cleanup.push(() => host.close());
+        expect(JSON.stringify(host.metadata)).not.toContain('fixture-secret');
+        expect(await host.call('search', ['https://interface3.music.163.com/eapi/song/enhance/player/url/v1', 'os=pc; MUSIC_U=MUSIC_U=']))
+            .toEqual({ configured: true, authorized: true, unchanged: false });
+        for (const url of ['https://third-party.test/audio', 'https://interface3.music.163.com.evil.test/audio', 'http://interface3.music.163.com/audio']) {
+            expect(await host.call('search', [url, 'os=pc'])).toEqual({ configured: true, authorized: false, unchanged: true });
+        }
+    });
+
     it('recovers a failed worker on the next requests without replaying the timed-out call', async () => {
         const host = await createPluginHost(`module.exports = { platform: 'Recoverable',
             search(query) { if (query === 'stuck') while (true) {} return { data: [query], isEnd: true }; }

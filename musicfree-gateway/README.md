@@ -78,6 +78,18 @@ Folia `standard/high` 请求插件 `standard/high`，`lossless/hires` 请求 `su
 
 服务端兼容 axios、crypto-js、dayjs、big-integer、qs、he、cheerio、webdav。其他依赖与 MusicFree 专属宿主 API 尚未实现，加载失败会报告原因。只运行管理员在 `MUSICFREE_SOURCES` 配置的可信脚本；worker 和 VM 用于兼容及超时隔离，不是运行恶意代码的安全沙箱。不要将客户端上传脚本接到此接口。
 
+### 插件账号与音源设置
+
+在网关服务或 Vercel 的服务端环境变量中配置 `MUSICFREE_PLUGIN_VARIABLES`，内容为按 provider ID 隔离的 JSON 对象。配置后重新部署或重启网关。以下只展示结构，值必须由自己的合法账号或服务提供；不要照填占位文本，也不要使用 `VITE_` 前缀：
+
+```json
+{"musicfree.52a08ed9d22b00e59a5c":{"music_u":"自己的 MUSIC_U 或 MUSIC_A","ikun_key":"自己的音源 key","source":"服务提供的酷我渠道值"}}
+```
+
+只填写需要的字段。宿主通过全局及方法参数的 `env.getUserVariables()` 将这些设置交给对应插件，恢复 worker 后继续保留，不在 provider 描述中返回值。网易音乐插件的 Cookie 提取代码错误地使用正则第一个捕获组；宿主会在网易官方 HTTPS 请求上应用显式配置的 `music_u`（支持裸 MUSIC_U 值、MUSIC_U/MUSIC_A Cookie），保留其他设备 Cookie，并避免向该插件调用的第三方站点转发网易凭据。
+
+合法账号配置不保证某首歌可播放，也不增加账号的订阅或地区权限。该版本网易音乐在歌曲条目 `code:404` 时直接转到酷我，不会尝试它的其他解析源，因此仅填写 `ikun_key` 不保证修复这些歌曲。没有凭据时保留插件原来的匿名行为，不提供共享账号或猜测渠道值。
+
 ## 验证
 
 ```bash

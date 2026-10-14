@@ -1,5 +1,6 @@
 import { parentPort, workerData } from 'node:worker_threads';
 import vm from 'node:vm';
+import { applyPluginAuthentication } from './pluginVariables.mjs';
 
 // musicfree-gateway/pluginWorker.mjs
 // Runs one administrator-configured CommonJS plugin; VM is compatibility, not a security sandbox.
@@ -15,6 +16,7 @@ for (const name of dependencies) {
     let value = imported.default ?? imported;
     if (name === 'axios') {
         value = value.create({ timeout: 12000 });
+        value.interceptors.request.use(config => applyPluginAuthentication(config, workerData.userVariables));
         value.default = value;
     }
     packages.set(name, value);
@@ -25,8 +27,9 @@ const loadPackage = name => {
     return packages.get(name);
 };
 // Public plugins also access env as a global, rather than as a method argument.
-// No credentials are invented or exposed to the browser; optional settings default empty.
-const env = Object.freeze({ getUserVariables: () => ({}) });
+// Administrator-configured credentials remain inside the provider's worker.
+// Return a fresh copy so a plugin cannot overwrite settings for later calls.
+const env = Object.freeze({ getUserVariables: () => ({ ...workerData.userVariables }) });
 const module = { exports: {} };
 const context = vm.createContext({
     module, exports: module.exports,
