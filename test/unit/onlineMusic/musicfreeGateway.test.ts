@@ -7,7 +7,7 @@ import { execFile } from 'node:child_process';
 import { promisify } from 'node:util';
 import { gzipSync } from 'node:zlib';
 import { createMusicFreeGateway } from '../../../musicfree-gateway/gateway.mjs';
-import { pluginId } from '../../../musicfree-gateway/sources.mjs';
+import { pluginId, readSource } from '../../../musicfree-gateway/sources.mjs';
 import { createPluginHost } from '../../../musicfree-gateway/pluginHost.mjs';
 import { createAssetProxy } from '../../../musicfree-gateway/assets.mjs';
 import { createMusicFreeProvider } from '@/services/onlineMusic/musicfreeProvider';
@@ -163,6 +163,29 @@ describe('MusicFree Web gateway', () => {
         const { stdout } = await promisify(execFile)(process.execPath,
             ['--no-experimental-require-module', entry]);
         expect(JSON.parse(stdout)).toEqual({ data: ['function'] });
+    });
+
+    it('rejects failed downloads and bounds streamed source bodies', async () => {
+        const upstream = await listen(createServer((req, res) => {
+            if (req.url === '/blocked.js') { res.writeHead(403); res.end('Forbidden'); return; }
+            res.writeHead(200, { 'Content-Type': 'text/plain' });
+            res.end(Buffer.alloc(4 * 1024 * 1024 + 1, 'x'));
+        }));
+        await expect(readSource(upstream + '/blocked.js')).rejects.toThrow('Source returned HTTP 403');
+        await expect(readSource(upstream + '/oversized.js')).rejects.toThrow('MusicFree source exceeds 4 MB');
+    });
+
+    it('loads computed dependency names while keeping unsupported packages blocked', async () => {
+        const host = await createPluginHost(`const name = ['a', 'xios'].join('');
+            const axios = require(name);
+            const webdav = require('web' + 'dav');
+            module.exports = { platform: 'Computed', search(query) {
+                if (query === 'unsupported') return require('node:' + 'fs');
+                return { data: [typeof axios.get, typeof webdav.createClient] };
+            } };`, 'computed.js');
+        cleanup.push(() => host.close());
+        expect(await host.call('search', ['ready'])).toEqual({ data: ['function', 'function'] });
+        await expect(host.call('search', ['unsupported'])).rejects.toThrow('Unsupported MusicFree dependency');
     });
 
     it('uses configured plugin variables without exposing them in metadata or forwarding auth to other hosts', async () => {

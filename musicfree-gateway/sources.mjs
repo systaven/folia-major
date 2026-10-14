@@ -1,7 +1,9 @@
 import { readFile } from 'node:fs/promises';
 import { resolve, dirname } from 'node:path';
 import { createHash } from 'node:crypto';
+import { Readable } from 'node:stream';
 import { createPluginHost } from './pluginHost.mjs';
+import { fetchAssetResponse } from './assetFetch.mjs';
 
 // musicfree-gateway/sources.mjs
 // Only server configuration selects executable plugins; browser requests cannot install scripts.
@@ -25,11 +27,23 @@ export function configuredMusicFreeVariables(value = process.env.MUSICFREE_PLUGI
 
 export async function readSource(source) {
     if (!isRemote(source)) return readFile(source, 'utf8');
-    const response = await fetch(source, { signal: AbortSignal.timeout(12000) });
-    if (!response.ok) throw new Error(`Source returned HTTP ${response.status}`);
-    const text = await response.text();
-    if (Buffer.byteLength(text) > 4 * 1024 * 1024) throw new Error('MusicFree source exceeds 4 MB');
-    return text;
+    const response = await fetchAssetResponse(source, { signal: AbortSignal.timeout(12000) });
+    if (response.status < 200 || response.status >= 300) {
+        await response.body?.cancel();
+        throw new Error(`Source returned HTTP ${response.status}`);
+    }
+    if (!response.body) throw new Error('MusicFree source has no body');
+    const stream = Readable.fromWeb(response.body);
+    const chunks = [];
+    let size = 0;
+    try {
+        for await (const chunk of stream) {
+            size += chunk.length;
+            if (size > 4 * 1024 * 1024) throw new Error('MusicFree source exceeds 4 MB');
+            chunks.push(chunk);
+        }
+    } finally { stream.destroy(); }
+    return Buffer.concat(chunks).toString('utf8');
 }
 
 // JSON lists can reference other JSON lists or JS files, including relative URLs and local files.

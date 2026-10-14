@@ -11,6 +11,12 @@ const packages = new Map();
 // Vercel may disable require(ESM), and module initialization is not plugin execution.
 const dependencies = new Set([...workerData.script.matchAll(/\brequire\s*\(\s*(['"])([^'"]+)\1\s*\)/g)]
     .map(match => match[2]).filter(name => allowedPackages.has(name)));
+// Obfuscated public plugins compute package names. Preload the allowlist for
+// those scripts so synchronous require remains compatible with ESM packages.
+if ([...workerData.script.matchAll(/\brequire\s*\(/g)].some(match =>
+    !/^\s*(['"])([^'"]+)\1\s*\)/.test(workerData.script.slice(match.index + match[0].length)))) {
+    for (const name of allowedPackages) dependencies.add(name);
+}
 for (const name of dependencies) {
     const imported = await import(name);
     let value = imported.default ?? imported;
