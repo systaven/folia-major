@@ -57,7 +57,12 @@ export function createMusicFreeGateway({ sources = [], origin = '', loader = loa
                 return true;
             }
             const route = pathname.match(/^\/api\/musicfree\/providers\/(musicfree\.[a-f0-9]+)\/(search|detail|audio|lyrics|recommendations|tracks)$/);
-            if (!route || req.method !== 'POST') { send(res, 404, { error: 'Unknown MusicFree endpoint' }); return true; }
+            if (!route) { send(res, 404, { error: 'Unknown MusicFree endpoint' }); return true; }
+            if (req.method !== 'POST') {
+                res.setHeader('Allow', 'POST, OPTIONS');
+                send(res, 405, { error: '此 MusicFree 接口需要 POST 和歌曲数据，请从播放器发起请求' });
+                return true;
+            }
             providerId = route[1];
             operation = route[2];
             const plugin = plugins.get(route[1]);
@@ -135,7 +140,11 @@ export function createMusicFreeGateway({ sources = [], origin = '', loader = loa
                 code: typeof error.code === 'string' && /^(E[A-Z0-9_]+|ERR_[A-Z0-9_]+)$/.test(error.code) ? error.code : 'ERR_MUSICFREE_PLUGIN',
                 upstreamStatus: Number.isInteger(error.upstreamStatus) ? error.upstreamStatus : undefined,
             });
-            send(res, 502, { error: error.message || 'MusicFree request failed',
+            // A plugin's invalid media result is a failed dependency, not a
+            // broken HTTP gateway. Proxies can replace 502 JSON with HTML.
+            const status = error.code === 'ERR_MUSICFREE_INVALID_AUDIO_URL' ? 424
+                : error.upstreamStatus === 503 ? 503 : 502;
+            send(res, status, { error: error.message || 'MusicFree request failed',
                 ...(error.code === 'ERR_MUSICFREE_INVALID_AUDIO_URL' ? { code: 'invalid-response' } : {}),
             });
         }

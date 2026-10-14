@@ -194,9 +194,13 @@ describe('MusicFree Web gateway', () => {
         const call = (method: string, body: unknown) => fetch(`${base}/api/musicfree/providers/${id}/${method}`, {
             method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify(body),
         });
+        const browserVisit = await fetch(`${base}/api/musicfree/providers/${id}/audio`);
+        expect(browserVisit.status).toBe(405);
+        expect(browserVisit.headers.get('allow')).toBe('POST, OPTIONS');
+        expect((await browserVisit.json()).error).toContain('POST');
         const page = await (await call('search', { query: 'Song', limit: 1, offset: 0 })).json();
         const response = await call('audio', { ...page.items[0], quality: 'standard' });
-        expect(response.status).toBe(502);
+        expect(response.status).toBe(424);
         expect(await response.json()).toMatchObject({ code: 'invalid-response', error: expect.stringContaining('无效播放地址') });
         expect(log).toHaveBeenCalledWith('[MusicFree] request failed', {
             providerId: id, operation: 'audio', code: 'ERR_MUSICFREE_INVALID_AUDIO_URL', upstreamStatus: undefined,
@@ -228,7 +232,7 @@ describe('MusicFree Web gateway', () => {
         });
         const page = await (await call('search', { query: 'Song', limit: 1, offset: 0 })).json();
         const response = await call('audio', { ...page.items[0], quality: 'high' });
-        expect(response.status).toBe(502);
+        expect(response.status).toBe(503);
         expect(await response.json()).toEqual({ error: 'Request failed with status code 503' });
         expect(log).toHaveBeenCalledWith('[MusicFree] request failed', {
             providerId: id, operation: 'audio', code: 'ERR_BAD_RESPONSE', upstreamStatus: 503,

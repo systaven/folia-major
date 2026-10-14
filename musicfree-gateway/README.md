@@ -137,4 +137,7 @@ Huibq 列表中的 `musicfree.c997421dc59d58c22d09` 是小芸音乐，其 0.3.0 
 
 2026-10-12 实测：订阅含 34 个条目，29 个插件可加载，5 个 `music.haitangw.net` 下载地址失败。相同列表的进程 RSS 从约 1.3 GB 降至约 730 MB。`W音乐` 修复了 `env is not defined`，搜索和歌词可用，但所测歌曲的播放结果不是有效 URL。5sing 样本能取得 HTTP 206、`audio/mpeg` 音频及歌词；部分其他插件仍有上游 503/412、页面解析失败或无音频地址。猫耳样本返回 HLS 播放列表，不等同于 Folia 浏览器音频已验证可播放。聚合订阅中的小芸、小秋等仍引用已暂停的 Render 音频服务，因此更换订阅地址不会自动修复这些插件。
 
-2026-10-13 继续验证 `musicfree.52a08ed9d22b00e59a5c`（网易音乐）：线上《夜曲》取音频返回 502 `Invalid URL`。本地追踪同一插件发现网易 `/api/song/enhance/player/url/v1` 返回歌曲条目 `code: 404`、无 URL，插件转到酷我 `http://nmobi.kuwo.cn/mobi.s`；后者 HTTP 200，但 `data.url` 为字符串 `"None"`。《晴天》《孤勇者》《稻香》的搜索首条样本也返回该占位值；《起风了》的 standard/high 样本在生产网关均取得 HTTP 206、64 KiB 的 `audio/mpeg` 数据。结果随歌曲而变，不代表所有歌曲都可播放。网关对非 HTTP(S) 音频地址返回带 `code: "invalid-response"` 的 502 和明确提示，保留可重试错误，不伪装为歌曲下架，也不向客户端暴露原始地址；同一 worker 的后续有效请求仍可正常签发媒体票据。
+2026-10-13 继续验证 `musicfree.52a08ed9d22b00e59a5c`（网易音乐）：线上《夜曲》取音频返回 502 `Invalid URL`。本地追踪同一插件发现网易 `/api/song/enhance/player/url/v1` 返回歌曲条目 `code: 404`、无 URL，插件转到酷我 `http://nmobi.kuwo.cn/mobi.s`；后者 HTTP 200，但 `data.url` 为字符串 `"None"`。《晴天》《孤勇者》《稻香》的搜索首条样本也返回该占位值；《起风了》的 standard/high 样本在生产网关均取得 HTTP 206、64 KiB 的 `audio/mpeg` 数据。结果随歌曲而变，不代表所有歌曲都可播放。网关对非 HTTP(S) 音频地址返回带 `code: "invalid-response"` 的 424（依赖失败）和明确提示，保留可重试错误，不伪装为歌曲下架，也不向客户端暴露原始地址；同一 worker 的后续有效请求仍可正常签发媒体票据。
+
+
+自定义域名排障补充：用相同的《夜曲》POST 请求对照，Vercel 原域名返回 JSON 502，而 `music.vachiika.me` 返回 Cloudflare HTML 502，造成前端“响应不是 JSON”的二次错误。网关将无效媒体地址单独返回 HTTP 424，明确的上游 503 保留为 HTTP 503；未知网关故障仍返回 502。浏览器只对非 JSON 的 502/503/504 自动重试一次，两次请求共用原有 45 秒期限；插件返回的 JSON 错误不重试。非 JSON 失败保留实际 HTTP 状态，便于区分代理故障与音源无效。直接打开只支持 POST 的接口会得到 HTTP 405 和 `Allow: POST, OPTIONS`，而不是误导性的“未知接口”。这些改动不使上游缺失的音频恢复。

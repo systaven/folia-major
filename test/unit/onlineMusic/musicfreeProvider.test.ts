@@ -57,13 +57,48 @@ describe('MusicFree Omni adapter', () => {
         await expect(provider.search!.searchSongs('Song', 10, 0)).rejects.toThrow('upstream failed');
     });
 
+    it('retries one non-JSON proxy failure with the same signed audio request and deadline', async () => {
+        const fetcher = vi.fn()
+            .mockResolvedValueOnce(new Response('<html>Bad Gateway</html>', { status: 502 }))
+            .mockResolvedValueOnce(new Response(JSON.stringify({ url: '/api/musicfree/assets/audio', expiresAt: 9000 })));
+        vi.stubGlobal('fetch', fetcher);
+        const provider = createMusicFreeProvider(descriptor, '/api/musicfree');
+        const result = await provider.playback!.getAudioSource(provider.normalizeSong(payload), 'high');
+        expect(result?.url).toBe('/api/musicfree/assets/audio');
+        expect(fetcher).toHaveBeenCalledTimes(2);
+        expect(fetcher.mock.calls[0]).toEqual(fetcher.mock.calls[1]);
+    });
+
+    it('bounds persistent non-JSON failures and preserves HTTP status', async () => {
+        const fetcher = vi.fn().mockImplementation(() => Promise.resolve(new Response('<html>Bad Gateway</html>', { status: 502 })));
+        vi.stubGlobal('fetch', fetcher);
+        const provider = createMusicFreeProvider(descriptor, '/api/musicfree');
+        await expect(provider.playback!.getAudioSource(provider.normalizeSong(payload), 'high')).rejects.toMatchObject({
+            code: 'network', httpStatus: 502, message: expect.stringContaining('HTTP 502'),
+        });
+        expect(fetcher).toHaveBeenCalledTimes(2);
+    });
+
+    it('does not retry a plugin JSON failure or a non-JSON route error', async () => {
+        const fetcher = vi.fn()
+            .mockResolvedValueOnce(new Response(JSON.stringify({ error: 'upstream failed' }), { status: 502 }))
+            .mockResolvedValueOnce(new Response('<html>Not Found</html>', { status: 404 }));
+        vi.stubGlobal('fetch', fetcher);
+        const provider = createMusicFreeProvider(descriptor, '/api/musicfree');
+        const song = provider.normalizeSong(payload);
+        await expect(provider.playback!.getAudioSource(song, 'high')).rejects.toMatchObject({ httpStatus: 502, message: 'upstream failed' });
+        expect(fetcher).toHaveBeenCalledTimes(1);
+        await expect(provider.playback!.getAudioSource(song, 'high')).rejects.toMatchObject({ httpStatus: 404 });
+        expect(fetcher).toHaveBeenCalledTimes(2);
+    });
+
     it('preserves a structured invalid audio response instead of treating it as a network outage', async () => {
         vi.stubGlobal('fetch', vi.fn().mockResolvedValue(new Response(JSON.stringify({
             error: '音源返回了无效播放地址', code: 'invalid-response',
-        }), { status: 502 })));
+        }), { status: 424 })));
         const provider = createMusicFreeProvider(descriptor, '/api/musicfree');
         await expect(provider.playback!.getAudioSource(provider.normalizeSong(payload), 'standard')).rejects.toMatchObject({
-            code: 'invalid-response', httpStatus: 502, message: '音源返回了无效播放地址',
+            code: 'invalid-response', httpStatus: 424, message: '音源返回了无效播放地址',
         });
     });
 
