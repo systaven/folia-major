@@ -1,7 +1,7 @@
 
 
 export default {
-  "musicfree": { "browserLikedSongs": "My likes", "browserLikedSongsDescription": "Songs saved in this browser" },
+  "musicfree": {"browserLikedSongs": "My likes", "browserLikedSongsDescription": "Songs saved in this browser", "aggregateName": "Automatic sources", "aggregatePolicy": "{{count}} sources · Full audio first · Automatic fallback", "selectedSource": "Last verified: {{name}}", "sourceMeasurements": "Source response times", "searchLatency": "Search", "audioLatency": "Verified audio", "failed": "Unavailable", "untested": "Not tested", "previewSkipped": "Preview skipped"},
   "libraryBravais": {
     "suiteName": "Bravais wall",
     "homeTitle": "Library",

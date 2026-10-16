@@ -39,6 +39,7 @@ test('shows registered sources and public recommendation cards with decoded cove
     });
     const coverLoaded = page.waitForResponse(response => response.url().endsWith(cover) && response.status() === 200);
     await openApp(page);
+    await expect.poll(() => page.evaluate(() => localStorage.getItem('active_online_provider_id'))).toBe('musicfree.aggregate');
     await expect(page.locator('[data-library-card]').filter({ has: page.locator('[aria-label^="Public MusicFree mix"]') }).first()).toBeVisible();
     await coverLoaded;
     const decoded = await page.evaluate(async url => {
@@ -54,6 +55,7 @@ test('shows registered sources and public recommendation cards with decoded cove
     await page.locator('input[name="bravais-search"]').press('Enter');
     expect((await searchRequest).postDataJSON()).toMatchObject({ query: 'holdin on' });
     await expect(page.getByRole('button', { name: 'MusicFree search regression', exact: true }).first()).toBeVisible();
+    await expect(page.locator('[data-aggregate-status]')).toContainText('2 sources');
     await page.keyboard.press('Escape');
     await expect(page.getByRole('button', { name: 'MusicFree search regression', exact: true })).toHaveCount(0);
     await page.locator('[data-bravais-account-toggle]').first().click();

@@ -1,10 +1,18 @@
 import { describe, expect, it, vi } from 'vitest';
 import { loadPlugins, configuredMusicFreeVariables, pluginId } from '../../../musicfree-gateway/sources.mjs';
+import { configuredMusicFreeSources } from '../../../musicfree-gateway/gateway.mjs';
 
 // test/unit/onlineMusic/musicfreeSources.test.ts
 // Aggregate cold starts must admit only two initializers while preserving independent failures.
 
 describe('MusicFree aggregate initialization', () => {
+    it('accepts comma-separated plugin and subscription URLs and the equivalent JSON array', () => {
+        const sources = ['https://plugins.test/wy.js', 'https://plugins.test/plugins.json'];
+        expect(configuredMusicFreeSources(` ${sources[0]}, ${sources[1]} `)).toEqual(sources);
+        expect(configuredMusicFreeSources(JSON.stringify(sources))).toEqual(sources);
+        expect(configuredMusicFreeSources('  ')).toEqual([]);
+        expect(() => configuredMusicFreeSources(`${sources[0]},`)).toThrow('MUSICFREE_SOURCES');
+    });
     it('isolates configured variables by provider and rejects malformed settings without printing values', async () => {
         const first = 'https://plugins.test/a.js';
         const second = 'https://plugins.test/b.js';

@@ -1,7 +1,7 @@
 
 
 export default {
-  "musicfree": { "browserLikedSongs": "Favorit saya", "browserLikedSongsDescription": "Lagu tersimpan di browser ini" },
+  "musicfree": {"browserLikedSongs": "Favorit saya", "browserLikedSongsDescription": "Lagu tersimpan di browser ini", "aggregateName": "Sumber otomatis", "aggregatePolicy": "{{count}} sumber · Audio lengkap diutamakan · Beralih otomatis", "selectedSource": "Terakhir diverifikasi: {{name}}", "sourceMeasurements": "Waktu respons sumber", "searchLatency": "Pencarian", "audioLatency": "Audio terverifikasi", "failed": "Tidak tersedia", "untested": "Belum diuji", "previewSkipped": "Pratinjau dilewati"},
   "libraryBravais": {
     "suiteName": "Dinding Bravais",
     "homeTitle": "Pustaka",

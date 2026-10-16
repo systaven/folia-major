@@ -4,6 +4,25 @@
 
 支持插件 JSON 列表及直接 JS 地址、本地文件、相对路径、嵌套列表；每个插件注册为独立的 `musicfree.*` provider。歌曲的原始 JSON 字段与复合主键保留在 `sourceRef.providerData`，用于后续播放、歌词及队列恢复。
 
+## 多源自动聚合
+
+服务端 `MUSICFREE_SOURCES` 支持英文逗号分隔的多个 JS / JSON 地址，也支持 JSON 字符串数组。一个订阅里的多个插件同样会加入聚合；无需逐一填写。
+
+```env
+MUSICFREE_SOURCES=https://raw.githubusercontent.com/martin65536/z-music-plugins/main/plugins/wy.js,https://raw.githubusercontent.com/LmLanmei64/MusicFreePlugins/master/dist/Ciallo%28%E4%BB%85%E7%BD%91%E6%98%93%29.js
+VITE_MUSICFREE_API_BASE=/api/musicfree
+```
+
+Vercel 修改 Production 环境变量后重新部署；独立网关修改后重启。`MUSICFREE_ITEM_SECRET` 保持固定。上述源是配置示例，可用性取决于其上游，配置更多地址不保证独立的上游服务。
+
+存在可播放插件时，Omni 注册统一的 `musicfree.aggregate` 聚合入口。首次使用自动选中“聚合音源”，已有 MusicFree 选择会迁移一次；之后会记住手动选择。搜索并行查询可搜索的插件，合并同一首歌并保留签名原始记录，单个源错误不影响其他源结果。搜索区可展开查看每个源的搜索耗时、音频验证耗时、暂不可用或已跳过试听状态；未验证的源明确显示“未测试”。
+
+播放按最近实测响应速度安排候选，最多同时验证三个源，返回最先通过验证的音频。浏览器读取代理音频的实际时长，跳过 25–45 秒试听、明显短于目录时长的截断音频和无法读取的媒体；所有源都不满足时明确报告，不悄悄播放试听。目录时长未知且音频不足 45 秒也会跳过，合法的 25–45 秒短曲同样受此限制。请求音质保持用户设置，不自动降级。
+
+推荐歌单汇总各源并保留封面，其歌曲也通过聚合播放；歌词在同一录音的候选中回退。“我喜欢”保存在聚合入口自己的浏览器收藏中，原独立音源的收藏仍保留在原入口。已确认网易命名空间的歌曲按网易 ID 匹配；其他来源严格比较完整曲名、艺人、专辑和已知时长，避免替换为翻唱、现场或不同 Remix。无法确认同一录音时不强行切换。
+
+实现入口：`src/services/onlineMusic/aggregateProvider.ts`，通过 Omni 的显式 provider 方法编排；HTTP 仍使用每个插件的签名接口，浏览器不执行插件。
+
 ## 本地启动
 
 要求 Node.js 24+。在仓库根目录运行：

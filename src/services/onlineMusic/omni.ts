@@ -442,6 +442,10 @@ export const omni = {
         return requireOnlineMusicProvider(providerId).normalizeCollection?.(raw, type) ?? null;
     },
 
+    async getProviderRecommendedCollections(providerId: OmniProviderId, limit = 35): Promise<OmniCollection[]> {
+        return requireOnlineMusicProvider(providerId).recommendations?.getRecommendedCollections?.(limit) ?? [];
+    },
+
     async getHomeFeed(limit = 35): Promise<{
         personalFm: UnifiedSong[];
         dailySongs: UnifiedSong[];

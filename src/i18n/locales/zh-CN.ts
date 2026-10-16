@@ -1,7 +1,7 @@
 
 
 export default {
-  "musicfree": { "browserLikedSongs": "我喜欢", "browserLikedSongsDescription": "保存在当前浏览器的歌曲" },
+  "musicfree": {"browserLikedSongs": "我喜欢", "browserLikedSongsDescription": "保存在当前浏览器的歌曲", "aggregateName": "聚合音源", "aggregatePolicy": "{{count}} 个音源 · 完整音频优先 · 自动切换", "selectedSource": "最近验证：{{name}}", "sourceMeasurements": "音源响应时间", "searchLatency": "搜索", "audioLatency": "音频验证", "failed": "暂不可用", "untested": "未测试", "previewSkipped": "已跳过试听"},
   "libraryBravais": {
     "suiteName": "Bravais 墙面",
     "homeTitle": "书库",

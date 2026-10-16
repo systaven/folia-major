@@ -13,6 +13,8 @@ import SearchResultsList from './SearchResultsList';
 import { useCollectionNavigationStore } from '../../../stores/useCollectionNavigationStore';
 import { useOnlineProviderAccountStore } from '../../../stores/useOnlineProviderAccountStore';
 import { omni } from '../../../services/onlineMusic/omni';
+import AggregateSourceStatus from './AggregateSourceStatus';
+import { AGGREGATE_ID } from '../../../services/onlineMusic/aggregateIdentity';
 
 // src/components/app/search/SearchWorkspace.tsx
 
@@ -175,6 +177,7 @@ const SearchWorkspace: React.FC<SearchWorkspaceProps> = ({
                                 </button>
                             ))}
                         </nav>
+                        {searchSourceTab === AGGREGATE_ID && <AggregateSourceStatus />}
                     </header>
 
                     <div className="mx-auto mt-3 min-h-0 w-full max-w-5xl flex-1">
