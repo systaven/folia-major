@@ -9,11 +9,13 @@
 服务端 `MUSICFREE_SOURCES` 支持英文逗号分隔的多个 JS / JSON 地址，也支持 JSON 字符串数组。一个订阅里的多个插件同样会加入聚合；无需逐一填写。
 
 ```env
-MUSICFREE_SOURCES=https://raw.githubusercontent.com/martin65536/z-music-plugins/main/plugins/wy.js,https://raw.githubusercontent.com/LmLanmei64/MusicFreePlugins/master/dist/Ciallo%28%E4%BB%85%E7%BD%91%E6%98%93%29.js
+MUSICFREE_SOURCES=https://raw.githubusercontent.com/LmLanmei64/MusicFreePlugins/master/dist/Ciallo%28%E4%BB%85%E7%BD%91%E6%98%93%29.js,https://raw.githubusercontent.com/martin65536/z-music-plugins/main/plugins/wy.js,https://raw.githubusercontent.com/martin65536/z-music-plugins/main/yuanli/wy.js
 VITE_MUSICFREE_API_BASE=/api/musicfree
 ```
 
 Vercel 修改 Production 环境变量后重新部署；独立网关修改后重启。`MUSICFREE_ITEM_SECRET` 保持固定。上述源是配置示例，可用性取决于其上游，配置更多地址不保证独立的上游服务。
+
+本项目的 Vercel 入口另外加载 `musicfree-gateway/vercelSources.mjs` 中的三个部署源：Ciallo（仅网易）、Z·网易云、元力 WY，与 `MUSICFREE_SOURCES` 合并去重。更新此清单并推送即可部署，无需修改 Vercel 后台；要移除清单内的源，需修改该文件。独立网关与 Docker 继续只读取环境变量。元力 WY 可能返回试听，聚合入口会按实际音频时长跳过。
 
 存在可播放插件时，Omni 注册统一的 `musicfree.aggregate` 聚合入口。首次使用自动选中“聚合音源”，已有 MusicFree 选择会迁移一次；之后会记住手动选择。搜索并行查询可搜索的插件，合并同一首歌并保留签名原始记录，单个源错误不影响其他源结果。搜索区可展开查看每个源的搜索耗时、音频验证耗时、暂不可用或已跳过试听状态；未验证的源明确显示“未测试”。
 
