@@ -10,6 +10,8 @@ import { setBravaisSearchOpen, useBravaisHomeUiStore } from './bravaisHomeUiStor
 import { useBravaisSeamStore } from './bravaisSeamLevel';
 import { selectBravaisHasCurrentSong } from './bravaisBack';
 import { usePlaybackStore } from '../../../stores/usePlaybackStore';
+import { useSearchNavigationStore } from '../../../stores/useSearchNavigationStore';
+import { useOnlineProviderAccountStore } from '../../../stores/useOnlineProviderAccountStore';
 
 // src/library/suites/bravais/useBravaisHomeChrome.ts
 // 首页缝里与来源无关的那一部分（设计稿 §10.5）：五个一级页签与 F6 的循环、全局搜索框（提交走 onSearchCommitted
@@ -33,6 +35,7 @@ export type BravaisHomeChrome = {
 type ChromeProps = Pick<
     LibraryHomeSurfaceProps,
     'onSearchCommitted' | 'onOpenLattice' | 'onBackToPlayer' | 'onOpenStagePlayer' | 'stageEnabled' | 'stageIsActive' | 'onOpenSettings'
+    | 'localSongs' | 'localLibraryCatalog'
 >;
 
 export const useBravaisHomeChrome = ({
@@ -75,7 +78,19 @@ export const useBravaisHomeChrome = ({
         hint: t('libraryBravaisHome.searchHint'),
         submitLabel: t('libraryBravaisHome.searchSubmit'),
         closeLabel: t('libraryBravaisHome.searchClose'),
-        onSubmit: query => latest.current.props.onSearchCommitted(query, latest.current.tab as HomeViewTab),
+        onSubmit: async query => {
+            const { tab: currentTab, props: currentProps } = latest.current;
+            const source = currentTab === 'local' || currentTab === 'navidrome' ? currentTab
+                : useOnlineProviderAccountStore.getState().activeProviderId;
+            // Match Grid's search flow: execute through the shared Omni-backed
+            // store before committing navigation, preserving the selected plugin.
+            const didSearch = await useSearchNavigationStore.getState().submitSearch({
+                query, sourceTab: source,
+                deps: { localSongs: currentProps.localSongs ?? [], localLibraryCatalog: currentProps.localLibraryCatalog,
+                    t: (key, fallback) => t(key, fallback ?? '') },
+            });
+            if (didSearch) currentProps.onSearchCommitted(query, source as HomeViewTab);
+        },
     }), [t]);
 
     const searchTool = useMemo<BravaisHomeTool>(() => ({

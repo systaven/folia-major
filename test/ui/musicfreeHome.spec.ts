@@ -26,6 +26,9 @@ test('shows registered sources and public recommendation cards with decoded cove
                 { id: searchOnlyId, name: 'Fixture search only', version: '1', primaryKey: ['id'],
                     methods: ['search', 'getMediaSource'], supportedSearchType: ['music'] },
             ], errors: [] } });
+        } else if (path.endsWith(`/providers/${recommendedId}/search`)) {
+            await route.fulfill({ json: { items: [{ item: { id: 'song', title: 'MusicFree search regression', artist: 'Fixture artist' },
+                proof: 'fixture-proof', artworkUrl: cover }], hasMore: false, nextOffset: 1 } });
         } else if (path.endsWith('/recommendations')) {
             await route.fulfill({ json: [{ kind: 'playlist', item: { id: 'mix', title: 'Public MusicFree mix' },
                 proof: 'fixture-proof', artworkUrl: cover }] });
@@ -45,6 +48,14 @@ test('shows registered sources and public recommendation cards with decoded cove
         return image.naturalWidth;
     }, cover);
     expect(decoded).toBe(64);
+    await page.locator('[data-bravais-seam-action="search"]').first().click();
+    await page.locator('input[name="bravais-search"]').fill('holdin on');
+    const searchRequest = page.waitForRequest(request => request.url().endsWith(`/providers/${recommendedId}/search`));
+    await page.locator('input[name="bravais-search"]').press('Enter');
+    expect((await searchRequest).postDataJSON()).toMatchObject({ query: 'holdin on' });
+    await expect(page.getByRole('button', { name: 'MusicFree search regression', exact: true }).first()).toBeVisible();
+    await page.keyboard.press('Escape');
+    await expect(page.getByRole('button', { name: 'MusicFree search regression', exact: true })).toHaveCount(0);
     await page.locator('[data-bravais-account-toggle]').first().click();
     await expect(page.locator('[data-bravais-account-provider]').filter({ hasText: 'Fixture recommendations' })).toBeVisible();
     await expect(page.locator('[data-bravais-account-provider]').filter({ hasText: 'Fixture search only' })).toBeVisible();
