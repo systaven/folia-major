@@ -29,7 +29,9 @@ export function createAggregatePlayback(providerIds: string[], searchableIds: st
 
     async function resolveAudioSource(song: SongResult, quality: AudioQualityPreference): Promise<ProviderAudioSource> {
         const originals = candidatesFor(song);
-        if (!originals.length) throw new OnlineProviderError('not-playable', '原音源已移除，请重新搜索歌曲');
+        // A persisted queue can outlive its original plugin URL: use its recording metadata to find a configured source.
+        const reference = originals[0] ?? (song.sourceRef?.kind === 'online' ? song as UnifiedSong : null);
+        if (!reference) throw new OnlineProviderError('not-playable', '歌曲缺少音源信息，请重新搜索');
         const controller = new AbortController();
         const queue = [...originals].sort((a, b) => aggregateSourcePriority(a.sourceRef.kind === 'online' ? a.sourceRef.providerId : '')
             - aggregateSourcePriority(b.sourceRef.kind === 'online' ? b.sourceRef.providerId : ''));
@@ -81,7 +83,7 @@ export function createAggregatePlayback(providerIds: string[], searchableIds: st
                         previews ? '可达音源均未提供可验证的完整音频，已跳过试听片段' : '各音源均无法播放这首歌，请稍后重试'));
                 }
             };
-            void findAlternatives(originals[0], originals, items => {
+            void findAlternatives(reference, originals, items => {
                 if (finished) return;
                 queue.push(...items.sort((a, b) => aggregateSourcePriority(a.sourceRef.kind === 'online' ? a.sourceRef.providerId : '')
                     - aggregateSourcePriority(b.sourceRef.kind === 'online' ? b.sourceRef.providerId : '')));

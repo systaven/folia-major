@@ -114,6 +114,14 @@ describe('aggregate media selection', () => {
         expect(first).toEqual(second);
         expect(omni.getAudioSource).toHaveBeenCalledTimes(1);
     });
+    it('resolves a persisted queue after its original plugin was removed without calling the removed provider', async () => {
+        vi.mocked(omni.searchProviderSongs).mockResolvedValue({ items: [song(ids[1])], hasMore: false, nextOffset: 1 });
+        vi.mocked(omni.getAudioSource).mockResolvedValue(audio('new-source'));
+        const player = createAggregatePlayback([ids[1]], [ids[1]], async () => {});
+        const oldQueueSong = JSON.parse(JSON.stringify(wrapAggregateSong([song(ids[0])])));
+        expect((await player.getAudioSource(oldQueueSong, 'high')).url).toBe('new-source');
+        expect(omni.getAudioSource).toHaveBeenCalledWith(expect.objectContaining({ sourceRef: expect.objectContaining({ providerId: ids[1] }) }), 'high');
+    });
     it('cancels losing media probes and ignores a late response instead of changing the selected source', async () => {
         let late!: (value: ReturnType<typeof audio>) => void;
         vi.mocked(omni.getAudioSource).mockImplementation(async input => input.sourceRef?.kind === 'online' && input.sourceRef.providerId === ids[0]
