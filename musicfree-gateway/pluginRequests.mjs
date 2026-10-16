@@ -15,7 +15,7 @@ export function configurePluginRequests(axios) {
         // Stay below the worker's 20-second RPC limit.
         if (context?.method === 'getMediaSource' && target?.origin === 'https://api.s0o1.com'
             && target.pathname === '/API/wyy_music' && config.timeout > 0 && config.timeout < 18000) {
-            config.timeout = 18000;
+            config.timeout = context.cialloBackup ? 6000 : 18000;
         }
         return config;
     });

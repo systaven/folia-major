@@ -175,6 +175,36 @@ describe('MusicFree Web gateway', () => {
         await expect(readSource(upstream + '/oversized.js')).rejects.toThrow('MusicFree source exceeds 4 MB');
     });
 
+    it('keeps Ciallo song identity and quality while rejecting preview backup audio', async () => {
+        const host = await createPluginHost(`const axios = require('axios');
+            axios.defaults.adapter = async config => {
+                if (config.url.includes('api.s0o1.com')) {
+                    if (config.timeout !== 6000) throw new Error('Unexpected primary deadline');
+                    throw Object.assign(new Error('private request'), { code: 'ETIMEDOUT', config });
+                }
+                if (config.timeout !== 9000 || config.headers.get('Cookie')) throw new Error('Invalid backup transport');
+                const id = config.params.id;
+                const row = { id, code: 200, url: 'https://m701.music.126.net/full.mp3', type: 'mp3',
+                    br: id === 4 ? 128000 : config.params.br, size: 5698917, time: id === 2 ? 30000 : 237381,
+                    freeTrialInfo: id === 3 ? { start: 0, end: 30 } : null };
+                if (id === 5) row.id = 999;
+                if (id === 6) row.url = 'https://unrelated.test/song.mp3';
+                return { status: 200, headers: {}, config, data: { data: [row] } };
+            };
+            module.exports = { platform: 'Ciallo(仅网易)', async getMediaSource(item) {
+                try { return (await axios.get('https://api.s0o1.com/API/wyy_music?id=' + item.id, { timeout: 8000 })).data; }
+                catch { throw new Error('网络请求失败'); }
+            } };`, 'ciallo-backup.js');
+        cleanup.push(() => host.close());
+        const full = await host.call('getMediaSource', [{ id: 1 }, 'high']);
+        expect(full.url).toBe('https://m701.music.126.net/full.mp3');
+        expect(full.headers.Referer).toBe('https://music.163.com/');
+        for (const id of [2, 3, 4, 5, 6]) {
+            await expect(host.call('getMediaSource', [{ id }, 'high'])).rejects.toMatchObject({ code: 'ERR_MUSICFREE_INVALID_AUDIO_URL' });
+        }
+        await expect(host.call('getMediaSource', [{ id: 1 }, 'super'])).rejects.toThrow('未自动降级');
+    });
+
     it('returns JSON 503 with safe diagnostics when a plugin masks a transport timeout', async () => {
         vi.spyOn(console, 'error').mockImplementation(() => {});
         const id = pluginId('timeout.js');

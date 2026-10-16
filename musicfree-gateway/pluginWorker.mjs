@@ -2,6 +2,7 @@ import { parentPort, workerData } from 'node:worker_threads';
 import vm from 'node:vm';
 import { applyPluginAuthentication } from './pluginVariables.mjs';
 import { configurePluginRequests, pluginRequestContext } from './pluginRequests.mjs';
+import { isCialloPlugin, resolveCialloAudio } from './cialloAudio.mjs';
 
 // musicfree-gateway/pluginWorker.mjs
 // Runs one administrator-configured CommonJS plugin; VM is compatibility, not a security sandbox.
@@ -62,7 +63,9 @@ parentPort.postMessage({ ready: {
 parentPort.on('message', ({ id, method, args }) => pluginRequestContext.run({ method }, async () => {
     try {
         if (!methods.includes(method) || typeof plugin[method] !== 'function') throw new Error('Unsupported plugin method');
-        const value = await plugin[method](...args, env);
+        const value = method === 'getMediaSource' && isCialloPlugin(plugin)
+            ? await resolveCialloAudio(plugin, args, env, packages.get('axios'))
+            : await plugin[method](...args, env);
         // Matches MusicFree's JSON persistence; drops non-persistable fields before crossing the bridge.
         parentPort.postMessage({ id, value: value == null ? null : JSON.parse(JSON.stringify(value)) });
     } catch (error) {
