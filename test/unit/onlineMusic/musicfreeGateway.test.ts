@@ -175,6 +175,54 @@ describe('MusicFree Web gateway', () => {
         await expect(readSource(upstream + '/oversized.js')).rejects.toThrow('MusicFree source exceeds 4 MB');
     });
 
+    it('returns JSON 503 with safe diagnostics when a plugin masks a transport timeout', async () => {
+        vi.spyOn(console, 'error').mockImplementation(() => {});
+        const id = pluginId('timeout.js');
+        const host = { metadata: { methods: ['search', 'getMediaSource'] }, async call(method: string) {
+            if (method === 'search') return { data: [{ id: 1 }], isEnd: true };
+            throw Object.assign(new Error('网络请求失败'), { code: 'ECONNABORTED', upstreamHost: 'api.s0o1.com' });
+        } };
+        const gateway = createMusicFreeGateway({ loader: async () => ({ plugins: new Map([[id, host]]), errors: [], close: async () => {} }) });
+        cleanup.push(() => gateway.close());
+        const base = await listen(createServer((req, res) => gateway.handle(req, res)));
+        const call = (method: string, body: unknown) => fetch(`${base}/api/musicfree/providers/${id}/${method}`, {
+            method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify(body),
+        });
+        const page = await (await call('search', { query: 'Song', limit: 1, offset: 0 })).json();
+        const response = await call('audio', { ...page.items[0], quality: 'standard' });
+        expect(response.status).toBe(503);
+        expect(response.headers.get('content-type')).toContain('application/json');
+        expect(await response.json()).toMatchObject({ code: 'network', upstreamCode: 'ECONNABORTED', upstreamHost: 'api.s0o1.com' });
+    });
+
+    it('adapts Ciallo audio deadlines and preserves masked transport errors per request', async () => {
+        const host = await createPluginHost(`const axios = require('axios');
+            axios.defaults.adapter = async config => {
+                if (config.url.includes('blocked.test')) throw Object.assign(new Error('secret URL'), {
+                    code: 'ECONNABORTED', config,
+                });
+                return { status: 200, headers: {}, config, data: config.timeout };
+            };
+            module.exports = { platform: 'Ciallo fixture', async getMediaSource(item) {
+                try { const r = await axios.get(item.url, { timeout: 8000 }); return { timeout: r.data }; }
+                catch { throw new Error('网络请求失败'); }
+            }, async search(url) { return (await axios.get(url, { timeout: 8000 })).data; } };`, 'ciallo.js');
+        cleanup.push(() => host.close());
+        const url = 'https://api.s0o1.com/API/wyy_music?id=26995594&yz=2';
+        expect(await host.call('getMediaSource', [{ url }])).toEqual({ timeout: 18000 });
+        expect(await host.call('search', [url])).toBe(8000);
+        expect(await host.call('getMediaSource', [{ url: 'https://unrelated.test/audio' }])).toEqual({ timeout: 8000 });
+        const [failed, healthy] = await Promise.allSettled([
+            host.call('getMediaSource', [{ url: 'https://blocked.test/audio?token=do-not-log' }]),
+            host.call('getMediaSource', [{ url }]),
+        ]);
+        expect(failed.status).toBe('rejected');
+        if (failed.status === 'rejected') expect(failed.reason).toMatchObject({
+            message: '网络请求失败', code: 'ECONNABORTED', upstreamHost: 'blocked.test',
+        });
+        expect(healthy).toMatchObject({ status: 'fulfilled', value: { timeout: 18000 } });
+    });
+
     it('loads computed dependency names while keeping unsupported packages blocked', async () => {
         const host = await createPluginHost(`const name = ['a', 'xios'].join('');
             const axios = require(name);
@@ -279,7 +327,7 @@ describe('MusicFree Web gateway', () => {
         expect(response.status).toBe(503);
         expect(await response.json()).toEqual({ error: 'Request failed with status code 503' });
         expect(log).toHaveBeenCalledWith('[MusicFree] request failed', {
-            providerId: id, operation: 'audio', code: 'ERR_BAD_RESPONSE', upstreamStatus: 503,
+            providerId: id, operation: 'audio', code: 'ERR_BAD_RESPONSE', upstreamStatus: 503, upstreamHost: '127.0.0.1',
         });
         expect(JSON.stringify(log.mock.calls)).not.toContain('do-not-log');
     });

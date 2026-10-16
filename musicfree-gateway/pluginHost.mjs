@@ -64,7 +64,9 @@ async function createWorkerHost(script, source, timeoutMs, userVariables) {
         if (!request) return;
         clearTimeout(request.timer);
         pending.delete(message.id);
-        if (message.error) request.reject(Object.assign(new Error(message.error), { code: message.code, upstreamStatus: message.upstreamStatus }));
+        if (message.error) request.reject(Object.assign(new Error(message.error), {
+            code: message.code, upstreamStatus: message.upstreamStatus, upstreamHost: message.upstreamHost,
+        }));
         else request.resolve(message.value);
     });
     let metadata;

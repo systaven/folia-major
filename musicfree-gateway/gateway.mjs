@@ -139,13 +139,16 @@ export function createMusicFreeGateway({ sources = [], origin = '', loader = loa
             console.error('[MusicFree] request failed', { providerId, operation,
                 code: typeof error.code === 'string' && /^(E[A-Z0-9_]+|ERR_[A-Z0-9_]+)$/.test(error.code) ? error.code : 'ERR_MUSICFREE_PLUGIN',
                 upstreamStatus: Number.isInteger(error.upstreamStatus) ? error.upstreamStatus : undefined,
+                ...(error.upstreamHost ? { upstreamHost: error.upstreamHost } : {}),
             });
             // A plugin's invalid media result is a failed dependency, not a
             // broken HTTP gateway. Proxies can replace 502 JSON with HTML.
+            const timedOut = ['ECONNABORTED', 'ETIMEDOUT', 'ERR_MUSICFREE_TIMEOUT'].includes(error.code);
             const status = error.code === 'ERR_MUSICFREE_INVALID_AUDIO_URL' ? 424
-                : error.upstreamStatus === 503 ? 503 : 502;
-            send(res, status, { error: error.message || 'MusicFree request failed',
+                : timedOut || error.upstreamStatus === 503 ? 503 : 502;
+            send(res, status, { error: timedOut ? '音源请求超时，请稍后重试或切换音源' : error.message || 'MusicFree request failed',
                 ...(error.code === 'ERR_MUSICFREE_INVALID_AUDIO_URL' ? { code: 'invalid-response' } : {}),
+                ...(timedOut ? { code: 'network', upstreamCode: error.code, upstreamHost: error.upstreamHost } : {}),
             });
         }
         return true;

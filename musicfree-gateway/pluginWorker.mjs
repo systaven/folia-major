@@ -1,6 +1,7 @@
 import { parentPort, workerData } from 'node:worker_threads';
 import vm from 'node:vm';
 import { applyPluginAuthentication } from './pluginVariables.mjs';
+import { configurePluginRequests, pluginRequestContext } from './pluginRequests.mjs';
 
 // musicfree-gateway/pluginWorker.mjs
 // Runs one administrator-configured CommonJS plugin; VM is compatibility, not a security sandbox.
@@ -22,6 +23,7 @@ for (const name of dependencies) {
     let value = imported.default ?? imported;
     if (name === 'axios') {
         value = value.create({ timeout: 12000 });
+        configurePluginRequests(value);
         value.interceptors.request.use(config => applyPluginAuthentication(config, workerData.userVariables));
         value.default = value;
     }
@@ -57,16 +59,18 @@ parentPort.postMessage({ ready: {
     methods: methods.filter(name => typeof plugin[name] === 'function'),
     supportedSearchType: plugin.supportedSearchType ?? ['music', 'album', 'artist', 'sheet', 'lyric'],
 } });
-parentPort.on('message', async ({ id, method, args }) => {
+parentPort.on('message', ({ id, method, args }) => pluginRequestContext.run({ method }, async () => {
     try {
         if (!methods.includes(method) || typeof plugin[method] !== 'function') throw new Error('Unsupported plugin method');
         const value = await plugin[method](...args, env);
         // Matches MusicFree's JSON persistence; drops non-persistable fields before crossing the bridge.
         parentPort.postMessage({ id, value: value == null ? null : JSON.parse(JSON.stringify(value)) });
     } catch (error) {
+        const failure = pluginRequestContext.getStore()?.failure;
         parentPort.postMessage({ id, error: error.message || 'Plugin request failed',
-            code: typeof error.code === 'string' && /^(E[A-Z0-9_]+|ERR_[A-Z0-9_]+)$/.test(error.code) ? error.code : undefined,
-            upstreamStatus: Number.isInteger(error.response?.status) ? error.response.status : undefined,
+            code: typeof error.code === 'string' && /^(E[A-Z0-9_]+|ERR_[A-Z0-9_]+)$/.test(error.code) ? error.code : failure?.code,
+            upstreamStatus: Number.isInteger(error.response?.status) ? error.response.status : failure?.upstreamStatus,
+            upstreamHost: failure?.upstreamHost,
         });
     }
-});
+}));
